@@ -1,0 +1,8 @@
+# Archives, installers and source files from asset packs
+*.zip
+*.msi
+*.psd
+*.unitypackage
+
+# Temporary working files
+scratchpad/
