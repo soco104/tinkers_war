@@ -854,14 +854,21 @@ class PrologueScene extends Phaser.Scene {
           this.time.delayedCall(1100, () => this.cup.setDepth(225));
         }, ms: 1100,
         speaker: 'Ren', text: '...Your tea, sir.' },
+      // Voss turns creepy, then aggressive
+      { run: () => this.tweens.add({ targets: this.voss, x: 338, duration: 300 }), ms: 300,
+        speaker: 'Collector Voss', text: "Don't run off, girl. Sit with me. A family like yours could use a friend at the Ministry." },
+      { speaker: 'Collector Voss', text: "Friends look after each other. Friends don't tell Papa things. And friends never, ever say no to me." },
+      { run: () => { this.ren.setFlipX(false); this.walk(this.ren, 410, 214, 300); }, ms: 300,
+        speaker: 'Ren', text: "I don't want to be your friend. Papa will be back any moment." },
       { run: () => {
-          this.tweens.add({ targets: this.voss, x: 344, duration: 200 });
-          this.tweens.add({ targets: this.ren, x: 380, duration: 200 });
+          this.tweens.add({ targets: this.voss, x: 346, duration: 150 });
+          this.tweens.add({ targets: this.ren, x: 382, duration: 150 });
           this.ren.setFlipX(true);
+          this.cameras.main.shake(200, 0.005);
         }, ms: 300,
-        speaker: 'Collector Voss', text: 'My, my. What a pretty girl. Perhaps she could work off what your father owes.' },
+        speaker: 'Collector Voss', text: "Don't you walk away from me! Nobody says no to the Ministry of Heat." },
       { run: () => { this.shake(this.ren, 6, 6, 60); this.cameras.main.shake(400, 0.006); }, ms: 700,
-        speaker: 'Ren', text: 'Let go of me!' },
+        speaker: 'Ren', text: 'Let go of me! Get your hands off me!' },
       // The struggle, then a hard cut to black
       { run: () => {
           this.shake(this.ren, 8, 4, 60);
@@ -880,7 +887,7 @@ class PrologueScene extends Phaser.Scene {
           this.knife.setPosition(400, 234).setDepth(1000);
           this.kid.setPosition(60, 190); // hiding behind the workbench
         }, ms: 600,
-        text: 'A scuffle. A knife from the kitchen table. Then, silence.' },
+        text: 'Ren fights back. A knife from the kitchen table. Then, silence.' },
       { run: () => this.fadeFromBlack(1000), ms: 1000,
         text: 'Collector Voss did not get up.' },
       { run: () => {
