@@ -31,19 +31,25 @@ const HEIGHT = 640;
 // Player
 const PLAYER_SPEED = 160;
 const PLAYER_RADIUS = 11;
-const PLAYER_MAX_HP = 3;
+const PLAYER_MAX_HP = 100;
+const GUARD_DAMAGE = 5;           // health lost per guard hit
 const INVULN_MS = 1000;
 
-// Wrench
-const WRENCH_RANGE = 48;
-const WRENCH_COOLDOWN_MS = 450;
-const SNEAK_ANGLE = Phaser.Math.DegToRad(100); // how far "behind" counts as behind
+// Weapons. Each weapon belongs to a class; class traits apply to every weapon in it.
+const WEAPON_CLASSES = {
+  nonLethal: { label: 'Non-lethal', instantKoChance: 0.05 }, // 5% chance any hit knocks the target out
+};
+const WEAPONS = {
+  wrench: { name: 'Wrench', weaponClass: 'nonLethal', damage: 5, range: 48, cooldownMs: 450 },
+};
+const SNEAK_ATTACK_MULTIPLIER = 4;                     // damage bonus from behind an unaware guard
+const SNEAK_ANGLE = Phaser.Math.DegToRad(100);         // how far "behind" counts as behind
 
 // Guards
 const GUARD_RADIUS = 12;
 const GUARD_SPEED = 70;
 const GUARD_CHASE_SPEED = 125;   // slower than Tinker, so she can escape
-const GUARD_MAX_HP = 2;
+const GUARD_MAX_HP = 100;
 const GUARD_ATTACK_RANGE = 30;
 const GUARD_ATTACK_WINDUP = 0.4; // seconds of warning before a hit lands
 const GUARD_ATTACK_COOLDOWN = 1.1;
@@ -428,13 +434,11 @@ class BootScene extends Phaser.Scene {
       g.fillStyle(0xfff0a0, 1).fillEllipse(12, 26, 6, 7);
     });
 
-    // Hearts
-    const heart = (color) => (g) => {
-      g.fillStyle(color, 1).fillCircle(6, 7, 6).fillCircle(16, 7, 6).fillTriangle(0.5, 9, 21.5, 9, 11, 19.5);
-      if (color !== 0x3b2f27) g.fillStyle(0xffffff, 0.5).fillCircle(5, 5, 2);
-    };
-    make('heart', 22, 20, heart(0xe8553d));
-    make('heart_empty', 22, 20, heart(0x3b2f27));
+    // Heart icon for the health gauge
+    make('heart', 22, 20, (g) => {
+      g.fillStyle(0xe8553d, 1).fillCircle(6, 7, 6).fillCircle(16, 7, 6).fillTriangle(0.5, 9, 21.5, 9, 11, 19.5);
+      g.fillStyle(0xffffff, 0.5).fillCircle(5, 5, 2);
+    });
 
     // Prologue props
     make('cog', 40, 40, (g) => drawCog(g, 20, 20, 15, 10, 0xffffff, 0x1a110b));
@@ -1159,6 +1163,8 @@ class FactoryScene extends Phaser.Scene {
     this.won = false;
     this.sabotagedCount = 0;
     this.hp = PLAYER_MAX_HP;
+    this.hpTween = null; // the scene object survives restarts; drop the old scene's tween
+    this.weapon = WEAPONS.wrench;
     this.invulnUntil = 0;
     this.knockUntil = 0;
     this.swingReadyAt = 0;
@@ -1286,6 +1292,7 @@ class FactoryScene extends Phaser.Scene {
       };
     });
     this.physics.add.collider(this.guards.map((g) => g.sprite), this.wallGroup);
+    this.guardBars = this.add.graphics().setDepth(1900);
   }
 
   buildAtmosphere() {
@@ -1311,12 +1318,17 @@ class FactoryScene extends Phaser.Scene {
   buildHud() {
     this.add.rectangle(WIDTH / 2, 17, WIDTH, 34, 0x140e0a, 0.85).setDepth(2000);
     this.add.rectangle(WIDTH / 2, 34, WIDTH, 2, 0xb5893a).setDepth(2000);
-    this.hearts = [];
-    for (let i = 0; i < PLAYER_MAX_HP; i++) {
-      this.hearts.push(this.add.image(30 + i * 28, 17, 'heart').setDepth(2001));
-    }
+    // Health gauge: heart icon + brass-framed bar + number
+    this.add.image(26, 17, 'heart').setDepth(2002);
+    this.hpBar = this.add.graphics().setDepth(2001);
+    this.hpText = this.add.text(124, 17, '', {
+      fontFamily: 'monospace', fontSize: '12px', fontStyle: 'bold', color: '#fff3d6',
+      stroke: '#1a0e08', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(2002);
+    this.hpShown = this.hp;
+    this.drawHpBar(this.hp);
     const style = { fontFamily: 'monospace', fontSize: '16px', color: '#e2bd55' };
-    this.hud = this.add.text(130, 17, '', style).setOrigin(0, 0.5).setDepth(2001);
+    this.hud = this.add.text(232, 17, '', style).setOrigin(0, 0.5).setDepth(2001);
     this.add.text(WIDTH - 20, 17, 'Move: WASD/Arrows   Swing: Space   Sabotage: E',
       { ...style, fontSize: '13px', color: '#a8916a' }).setOrigin(1, 0.5).setDepth(2001);
     this.prompt = this.add.text(0, 0, '[E] Sabotage', {
@@ -1367,11 +1379,11 @@ class FactoryScene extends Phaser.Scene {
 
   handleSwing(time) {
     if (!Phaser.Input.Keyboard.JustDown(this.cursors.space) || time < this.swingReadyAt) return;
-    this.swingReadyAt = time + WRENCH_COOLDOWN_MS;
+    this.swingReadyAt = time + this.weapon.cooldownMs;
     this.swingStart = time;
 
     const p = this.player;
-    let target = null, best = WRENCH_RANGE;
+    let target = null, best = this.weapon.range;
     for (const g of this.guards) {
       if (g.state === 'ko') continue;
       const d = Phaser.Math.Distance.Between(p.x, p.y, g.sprite.x, g.sprite.y);
@@ -1389,15 +1401,22 @@ class FactoryScene extends Phaser.Scene {
     const unaware = g.state === 'patrol' || g.state === 'return';
     const behind = Math.abs(Phaser.Math.Angle.Wrap(angleFromGuard - g.facing)) > SNEAK_ANGLE;
 
-    this.sparks((s.x + p.x) / 2, (s.y + p.y) / 2 - 20);
-    this.cameras.main.shake(90, 0.005);
+    const weapon = this.weapon;
+    const weaponClass = WEAPON_CLASSES[weapon.weaponClass];
+    const sneak = unaware && behind;
+    const damage = weapon.damage * (sneak ? SNEAK_ATTACK_MULTIPLIER : 1);
+    const luckyKo = Math.random() < (weaponClass.instantKoChance || 0);
 
-    if (unaware && behind) {
+    this.sparks((s.x + p.x) / 2, (s.y + p.y) / 2 - 20);
+    this.cameras.main.shake(sneak || luckyKo ? 140 : 90, sneak || luckyKo ? 0.008 : 0.005);
+
+    if (luckyKo) {
       g.hp = 0;
-      this.floatText(s.x, s.y - 60, 'SNEAK ATTACK!', '#ffd43b');
+      this.floatText(s.x, s.y - 78, 'LUCKY KNOCKOUT!', '#ffd43b');
     } else {
-      g.hp -= 1;
-      this.floatText(s.x, s.y - 60, 'CLANG!', '#ffffff');
+      g.hp = Math.max(0, g.hp - damage);
+      if (sneak) this.floatText(s.x, s.y - 78, `SNEAK ATTACK! -${damage}`, '#ffd43b');
+      else this.floatText(s.x, s.y - 78, `CLANG! -${damage}`, '#ffffff');
     }
 
     if (g.hp <= 0) return this.knockOut(g);
@@ -1427,7 +1446,7 @@ class FactoryScene extends Phaser.Scene {
 
   hurtPlayer(g) {
     if (this.time.now < this.invulnUntil || this.gameOver) return;
-    this.hp -= 1;
+    this.hp = Math.max(0, this.hp - GUARD_DAMAGE);
     this.updateHud();
     this.invulnUntil = this.time.now + INVULN_MS;
     this.knockUntil = this.time.now + 180;
@@ -1438,7 +1457,7 @@ class FactoryScene extends Phaser.Scene {
     p.setTint(0xff5544);
     this.time.delayedCall(160, () => p.clearTint());
     this.cameras.main.shake(160, 0.01);
-    this.floatText(p.x, p.y - 56, '-1', '#ff6b6b');
+    this.floatText(p.x, p.y - 56, `-${GUARD_DAMAGE}`, '#ff6b6b');
 
     if (this.hp <= 0) this.defeated();
   }
@@ -1674,13 +1693,23 @@ class FactoryScene extends Phaser.Scene {
       .setDepth(p.y + 1)
       .setAlpha(p.alpha);
 
+    this.guardBars.clear();
     for (const g of this.guards) {
       const s = g.sprite;
       if (g.state === 'ko') {
         g.icon.setPosition(s.x + 18, s.y - 30);
         continue;
       }
-      g.icon.setPosition(s.x, s.y - 62);
+      // Small health bar over a hurt guard
+      const hurt = g.hp < GUARD_MAX_HP;
+      if (hurt) {
+        const pct = g.hp / GUARD_MAX_HP;
+        this.guardBars.fillStyle(0x1a0e08, 1).fillRect(s.x - 17, s.y - 67, 34, 6);
+        this.guardBars.fillStyle(pct > 0.6 ? 0x7fbf5a : pct > 0.3 ? 0xe0a030 : 0xe8553d, 1)
+          .fillRect(s.x - 16, s.y - 66, 32 * pct, 4);
+        this.guardBars.lineStyle(1, C.brass, 1).strokeRect(s.x - 17, s.y - 67, 34, 6);
+      }
+      g.icon.setPosition(s.x, s.y - (hurt ? 80 : 62));
       s.setDepth(s.y);
       const c = Math.cos(g.facing);
       if (c < -0.2) s.setFlipX(true);
@@ -1785,8 +1814,30 @@ class FactoryScene extends Phaser.Scene {
       .setVisible(true);
   }
 
+  // Brass-framed health bar; colour shifts green -> amber -> red as it drains
+  drawHpBar(value) {
+    const g = this.hpBar, x = 40, y = 8, w = 168, h = 18;
+    const pct = Phaser.Math.Clamp(value / PLAYER_MAX_HP, 0, 1);
+    g.clear();
+    g.fillStyle(0x1a0e08, 1).fillRoundedRect(x, y, w, h, 9);
+    const fillW = (w - 8) * pct;
+    if (fillW > 2) {
+      const col = pct > 0.6 ? 0x7fbf5a : pct > 0.3 ? 0xe0a030 : 0xe8553d;
+      g.fillStyle(col, 1).fillRoundedRect(x + 4, y + 4, fillW, h - 8, Math.min(5, fillW / 2));
+      g.fillStyle(0xffffff, 0.25).fillRect(x + 8, y + 5, Math.max(0, fillW - 8), 2);
+    }
+    g.lineStyle(2, C.brass, 1).strokeRoundedRect(x, y, w, h, 9);
+    g.fillStyle(C.brassLight, 1).fillCircle(x + 5, y + h / 2, 1.6).fillCircle(x + w - 5, y + h / 2, 1.6);
+  }
+
   updateHud() {
-    this.hearts.forEach((h, i) => h.setTexture(i < this.hp ? 'heart' : 'heart_empty'));
+    // Animate the bar down to the new value
+    if (this.hpTween) this.hpTween.stop();
+    this.hpTween = this.tweens.addCounter({
+      from: this.hpShown, to: this.hp, duration: 300, ease: 'Quad.easeOut',
+      onUpdate: (tw) => { this.hpShown = tw.getValue(); this.drawHpBar(this.hpShown); },
+    });
+    this.hpText.setText(`${this.hp}`);
     this.hud.setText(`Furnaces sabotaged: ${this.sabotagedCount} / ${this.furnaces.length}`);
   }
 }
