@@ -8,7 +8,7 @@
     html, body {
       margin: 0;
       height: 100%;
-      background: #05060a;
+      background: #050403;
       overflow: hidden;
     }
     #game { width: 100%; height: 100%; }
@@ -21,20 +21,50 @@
 
 <script>
 // ---------------------------------------------------------------------------
-// Tinker's War — a tiny top-down stealth prototype
+// Tinker's War — a tiny top-down steampunk stealth game
+// All art is drawn in code (see BootScene).
 // ---------------------------------------------------------------------------
 
 const WIDTH = 960;
 const HEIGHT = 640;
 
+// Player
 const PLAYER_SPEED = 160;
 const PLAYER_RADIUS = 11;
+const PLAYER_MAX_HP = 3;
+const INVULN_MS = 1000;
+
+// Wrench
+const WRENCH_RANGE = 48;
+const WRENCH_COOLDOWN_MS = 450;
+const SNEAK_ANGLE = Phaser.Math.DegToRad(100); // how far "behind" counts as behind
+
+// Guards
+const GUARD_RADIUS = 12;
 const GUARD_SPEED = 70;
-const GUARD_RADIUS = 13;
+const GUARD_CHASE_SPEED = 125;   // slower than Tinker, so she can escape
+const GUARD_MAX_HP = 2;
+const GUARD_ATTACK_RANGE = 30;
+const GUARD_ATTACK_WINDUP = 0.4; // seconds of warning before a hit lands
+const GUARD_ATTACK_COOLDOWN = 1.1;
 const VISION_RANGE = 170;
 const VISION_HALF_ANGLE = Phaser.Math.DegToRad(30);
 const VISION_RAYS = 40;
-const SABOTAGE_DISTANCE = 50;
+
+const SABOTAGE_DISTANCE = 52;
+
+// Character textures are 48x60; the feet (collision circle centre) sit at y=49.
+const CHAR_W = 48;
+const CHAR_H = 60;
+const FEET_Y = 49;
+
+// Palette
+const C = {
+  brass: 0xc9a227, brassLight: 0xe2bd55, brassDark: 0x6e5020,
+  copper: 0x7a4220, copperLight: 0xd98c4a,
+  wallDark: 0x221a15, wall: 0x3a2d24, rivet: 0x8a6d4b,
+  fire: 0xff7a1a,
+};
 
 // Level layout: walls and crates as {x, y, w, h} (top-left corner)
 const WALLS = [
@@ -51,14 +81,14 @@ const WALLS = [
   { x: 700, y: 20,  w: 20,  h: 200 },
   { x: 700, y: 340, w: 20,  h: 280 },
   // crates
-  { x: 330, y: 290, w: 60,  h: 60 },
-  { x: 580, y: 290, w: 60,  h: 60 },
+  { x: 330, y: 290, w: 60,  h: 60, crate: true },
+  { x: 580, y: 290, w: 60,  h: 60, crate: true },
 ];
 
 const FURNACES = [
   { x: 100, y: 90 },
   { x: 490, y: 560 },
-  { x: 870, y: 60 },
+  { x: 870, y: 70 },
 ];
 
 const PLAYER_START = { x: 80, y: 560 };
@@ -68,219 +98,996 @@ const GUARDS = [
   { waypoints: [{ x: 780, y: 180 }, { x: 890, y: 180 }, { x: 890, y: 560 }, { x: 780, y: 560 }] },
 ];
 
-class FactoryScene extends Phaser.Scene {
-  constructor() {
-    super('Factory');
+const STEAM_VENTS = [
+  { x: 210, y: 244 }, { x: 210, y: 376 }, { x: 710, y: 224 }, { x: 710, y: 336 }, { x: 490, y: 146 },
+];
+
+// ---------------------------------------------------------------------------
+// Drawing helpers
+// ---------------------------------------------------------------------------
+
+function drawPipe(g, x1, y1, x2, y2, thick = 8) {
+  const horiz = y1 === y2;
+  g.lineStyle(thick, C.copper, 1).lineBetween(x1, y1, x2, y2);
+  g.lineStyle(thick * 0.35, C.copperLight, 1);
+  if (horiz) g.lineBetween(x1, y1 - thick * 0.2, x2, y2 - thick * 0.2);
+  else g.lineBetween(x1 - thick * 0.2, y1, x2 - thick * 0.2, y2);
+  g.fillStyle(C.brass, 1);
+  const len = horiz ? x2 - x1 : y2 - y1;
+  for (let d = 30; d < len; d += 70) {
+    if (horiz) g.fillRect(x1 + d - 3, y1 - thick * 0.8, 6, thick * 1.6);
+    else g.fillRect(x1 - thick * 0.8, y1 + d - 3, thick * 1.6, 6);
   }
+}
+
+function drawGauge(g, x, y) {
+  g.fillStyle(C.brass, 1).fillCircle(x, y, 8);
+  g.fillStyle(0xf2e6c9, 1).fillCircle(x, y, 5.5);
+  g.lineStyle(1.5, 0xb03020, 1).lineBetween(x, y, x + 3.5, y - 3);
+  g.fillStyle(0x222222, 1).fillCircle(x, y, 1);
+}
+
+// Cute chibi character: big head, small body. `o` customises colours and extras.
+function drawChibi(g, o) {
+  const skin = o.skin ?? 0xf6cfa8;
+  g.fillStyle(0x000000, 0.35).fillEllipse(24, 54, 30, 8);                       // shadow
+  g.fillStyle(o.boots, 1).fillRoundedRect(15, 47, 8, 7, 2).fillRoundedRect(25, 47, 8, 7, 2);
+  g.fillStyle(o.outfit, 1).fillRoundedRect(12, 32, 24, 19, 7);                  // body
+  g.fillCircle(11, 39, 4.5).fillCircle(37, 39, 4.5);                            // sleeves
+  g.fillStyle(skin, 1).fillCircle(10, 44, 3.2).fillCircle(38, 44, 3.2);         // hands
+  if (o.body) o.body(g);
+  g.fillStyle(o.hair, 1).fillCircle(24, 21, 17);                                // hair (back)
+  if (o.longHair) g.fillRoundedRect(7, 18, 34, 22, 9);
+  if (o.pigtails) g.fillCircle(6, 27, 5).fillCircle(42, 27, 5);
+  g.fillStyle(skin, 1).fillEllipse(24, 25, 28, 22);                             // face
+  g.fillStyle(o.hair, 1).fillEllipse(24, 13, 30, 12);                           // bangs
+  g.fillStyle(0x2b1d14, 1).fillEllipse(18, 26, 5, 6.5).fillEllipse(30, 26, 5, 6.5); // eyes
+  g.fillStyle(0xffffff, 1).fillCircle(19, 24.5, 1.4).fillCircle(31, 24.5, 1.4);
+  g.fillStyle(0xff8f8f, 0.6).fillEllipse(14, 30, 5, 3).fillEllipse(34, 30, 5, 3); // blush
+  g.fillStyle(0x7a3b2e, 1).fillRect(22.5, 31, 3, 1.5);                          // mouth
+  if (o.head) o.head(g);
+}
+
+function drawGoggles(g) {
+  g.fillStyle(0x4a2f1c, 1).fillRect(7, 13, 34, 4);
+  g.fillStyle(C.brass, 1).fillCircle(17, 15, 6.5).fillCircle(31, 15, 6.5);
+  g.fillStyle(0xa8842f, 1).fillRect(22, 14, 4, 3);
+  g.fillStyle(0x7fd0dc, 1).fillCircle(17, 15, 4.5).fillCircle(31, 15, 4.5);
+  g.fillStyle(0xffffff, 0.85).fillCircle(15.5, 13.5, 1.5).fillCircle(29.5, 13.5, 1.5);
+}
+
+const CHARACTERS = {
+  tinker: {
+    hair: 0x8b4a2b, outfit: 0xe2c9a0, boots: 0x3b2a1e, pigtails: true,
+    body: (g) => {
+      g.fillStyle(0x7a4a24, 1).fillRoundedRect(15, 35, 18, 16, 3);              // brown apron
+      g.lineStyle(2, 0x7a4a24, 1).lineBetween(16, 35, 14, 32).lineBetween(32, 35, 34, 32);
+      g.fillStyle(0x5e3719, 1).fillRect(20, 42, 8, 5);                           // pocket
+      g.fillStyle(C.brass, 1).fillCircle(26, 41.5, 1.5);
+    },
+    head: drawGoggles,
+  },
+  guard: {
+    hair: 0x2a2320, outfit: 0x262a3d, boots: 0x15151c, skin: 0xeec39a,
+    body: (g) => {
+      g.fillStyle(0x15151c, 1).fillRect(12, 44, 24, 3);                          // belt
+      g.fillStyle(C.brass, 1).fillRect(22, 43.5, 4, 4)
+        .fillCircle(24, 36, 1.4).fillCircle(24, 40, 1.4)                         // buttons
+        .fillRect(9, 33, 6, 3).fillRect(33, 33, 6, 3);                           // epaulettes
+      // lantern held in the right hand
+      g.lineStyle(1.5, C.brassDark, 1).strokeCircle(40, 45, 3);
+      g.fillStyle(C.brassDark, 1).fillRect(36, 47, 9, 11);
+      g.fillStyle(0xffc45a, 1).fillRect(37.5, 49, 6, 7);
+      g.fillStyle(C.brass, 1).fillRect(35, 46, 11, 2).fillRect(35, 57, 11, 2);
+    },
+    head: (g) => {
+      g.fillStyle(0x1b1e2e, 1).fillRoundedRect(8, 3, 32, 13, 6);                 // cap
+      g.fillStyle(0x0e0f18, 1).fillRect(8, 12, 32, 3).fillEllipse(24, 16, 30, 5);
+      g.fillStyle(C.brass, 1).fillCircle(24, 8, 3);
+      g.lineStyle(2, 0x1a1410, 1).lineBetween(14, 21, 21, 23).lineBetween(34, 21, 27, 23);
+    },
+  },
+  boss: {
+    hair: 0x6b6b6b, outfit: 0x6e1f24, boots: 0x1a1a1a,
+    body: (g) => {
+      g.fillStyle(0x3a1014, 1).fillRect(21, 33, 6, 18);
+      g.lineStyle(1.5, C.brass, 1).lineBetween(16, 42, 23, 45);
+      g.fillStyle(C.brass, 1).fillCircle(24, 37, 1.4).fillCircle(24, 42, 1.4);
+    },
+    head: (g) => {
+      g.fillStyle(0x161616, 1).fillRect(13, 0, 22, 11);                          // top hat
+      g.fillStyle(0xb5893a, 1).fillRect(13, 7, 22, 3);
+      g.fillStyle(0x161616, 1).fillEllipse(24, 11, 36, 6);
+      g.fillStyle(0x6b6b6b, 1).fillEllipse(20, 30.5, 9, 3.5).fillEllipse(28, 30.5, 9, 3.5);
+      g.lineStyle(1.5, C.brass, 1).strokeCircle(30, 26, 4.5);                    // monocle
+      g.lineStyle(2, 0x3a3a3a, 1).lineBetween(14, 21, 21, 23).lineBetween(34, 21, 27, 23);
+    },
+  },
+  juno: {
+    hair: 0x2b1a12, outfit: 0x3d6e63, boots: 0x2a2018, skin: 0xd9a77e,
+    body: (g) => {
+      g.fillStyle(0x2c5249, 1).fillRect(17, 36, 14, 12);
+      g.lineStyle(2, 0x2c5249, 1).lineBetween(17, 36, 15, 32).lineBetween(31, 36, 33, 32);
+    },
+    head: (g) => {
+      g.fillStyle(0xc0532b, 1).fillRect(8, 10, 32, 5).fillCircle(40, 13, 3);    // bandana
+    },
+  },
+  ren: {
+    hair: 0x8b4a2b, outfit: 0x5b3f72, boots: 0x2a1e2a, longHair: true,
+    body: (g) => {
+      g.fillStyle(0xc96b2c, 1).fillRoundedRect(13, 31, 22, 5, 2);                // scarf
+      g.fillStyle(C.brass, 1).fillCircle(24, 41, 1.4).fillCircle(24, 46, 1.4);
+    },
+    head: drawGoggles,
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Boot: generate every texture once
+// ---------------------------------------------------------------------------
+
+class BootScene extends Phaser.Scene {
+  constructor() { super('Boot'); }
+
+  create() {
+    const make = (key, w, h, draw) => {
+      const g = this.make.graphics({ x: 0, y: 0 }, false);
+      draw(g);
+      g.generateTexture(key, w, h);
+      g.destroy();
+    };
+
+    for (const [key, opts] of Object.entries(CHARACTERS)) {
+      make(key, CHAR_W, CHAR_H, (g) => drawChibi(g, opts));
+    }
+
+    // Wrench (pivot at the left end of the handle)
+    make('wrench', 32, 12, (g) => {
+      g.fillStyle(0x9aa3a8, 1).fillRoundedRect(0, 4, 22, 4, 2);
+      g.fillStyle(0x7a4a24, 1).fillRoundedRect(0, 3.5, 9, 5, 2);
+      g.fillStyle(0xb8c0c4, 1).fillRoundedRect(19, 0, 7, 12, 2).fillRect(25, 0, 6, 4).fillRect(25, 8, 6, 4);
+    });
+
+    // Riveted metal floor plate
+    make('plate', 40, 40, (g) => {
+      g.fillStyle(0x16110e, 1).fillRect(0, 0, 40, 40);
+      g.fillStyle(0x241d18, 1).fillRect(1, 1, 38, 38);
+      g.fillStyle(0x2f2620, 1).fillRect(1, 1, 38, 2).fillRect(1, 1, 2, 38);
+      g.fillStyle(0x110d0a, 1).fillRect(1, 37, 38, 2).fillRect(37, 1, 2, 38);
+      for (const [x, y] of [[6, 6], [34, 6], [6, 34], [34, 34]]) {
+        g.fillStyle(0x4d3d2c, 1).fillCircle(x, y, 2.2);
+        g.fillStyle(0x8a6d4b, 1).fillCircle(x - 0.6, y - 0.6, 0.9);
+      }
+    });
+
+    // Brass furnace (60x70, fire is a separate sprite)
+    make('furnace', 60, 70, (g) => {
+      g.fillStyle(C.brassDark, 1).fillRect(24, 0, 12, 18);
+      g.fillStyle(C.brass, 1).fillRect(22, 0, 16, 4);
+      g.fillStyle(C.copper, 1).fillRect(0, 40, 5, 6).fillRect(55, 40, 5, 6);
+      g.fillStyle(0xb5893a, 1).fillRoundedRect(4, 16, 52, 54, 6);
+      g.lineStyle(3, C.brassDark, 1).strokeRoundedRect(4, 16, 52, 54, 6);
+      g.fillStyle(C.brassLight, 1).fillRect(6, 18, 48, 5);
+      g.fillStyle(C.brassDark, 1);
+      for (let x = 10; x <= 50; x += 8) g.fillCircle(x, 28, 1.6).fillCircle(x, 65, 1.6);
+      g.fillStyle(0x5a3e18, 1).fillRoundedRect(14, 34, 32, 30, 4);
+      g.fillStyle(0x1a0e08, 1).fillRect(18, 38, 24, 22);
+    });
+
+    // Flame
+    make('flame', 24, 32, (g) => {
+      g.fillStyle(0xff5a00, 1).fillEllipse(12, 22, 20, 18).fillTriangle(3, 20, 21, 20, 12, 1);
+      g.fillStyle(0xffa600, 1).fillEllipse(12, 24, 13, 12).fillTriangle(6, 23, 18, 23, 12, 8);
+      g.fillStyle(0xfff0a0, 1).fillEllipse(12, 26, 6, 7);
+    });
+
+    // Hearts
+    const heart = (color) => (g) => {
+      g.fillStyle(color, 1).fillCircle(6, 7, 6).fillCircle(16, 7, 6).fillTriangle(0.5, 9, 21.5, 9, 11, 19.5);
+      if (color !== 0x3b2f27) g.fillStyle(0xffffff, 0.5).fillCircle(5, 5, 2);
+    };
+    make('heart', 22, 20, heart(0xe8553d));
+    make('heart_empty', 22, 20, heart(0x3b2f27));
+
+    // Soft radial textures (glow, steam, vignette) via canvas gradients
+    const radial = (key, w, h, stops, inner = 0) => {
+      const tex = this.textures.createCanvas(key, w, h);
+      const ctx = tex.getContext();
+      const grad = ctx.createRadialGradient(w / 2, h / 2, inner, w / 2, h / 2, Math.max(w, h) / 2);
+      for (const [pos, col] of stops) grad.addColorStop(pos, col);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      tex.refresh();
+    };
+    radial('glow', 128, 128, [[0, 'rgba(255,255,255,1)'], [0.4, 'rgba(255,255,255,0.4)'], [1, 'rgba(255,255,255,0)']]);
+    radial('puff', 64, 64, [[0, 'rgba(255,255,255,0.8)'], [1, 'rgba(255,255,255,0)']]);
+    radial('vignette', WIDTH, HEIGHT, [[0, 'rgba(0,0,0,0)'], [0.5, 'rgba(0,0,0,0)'], [1, 'rgba(8,4,2,0.7)']], 0);
+
+    this.scene.start('Story');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Opening story
+// ---------------------------------------------------------------------------
+
+const SPEAKER_COLORS = {
+  'Tinker': '#ff9fc4',
+  'Juno': '#8ce0b8',
+  'Boss Harrow': '#ff6b6b',
+  'Ren': '#c4a7ff',
+};
+
+// bg: which backdrop to show. speaker: null = narration.
+const STORY = [
+  { bg: 'day', speaker: null, text: 'The Heat Factory. Twelve-hour shifts. Furnaces that never go cold.' },
+  { bg: 'day', speaker: 'Tinker', text: 'Boss, the press on line three is shaking again. The safety latch is cracked. Please, it has to be fixed before someone gets hurt.' },
+  { bg: 'day', speaker: 'Boss Harrow', text: "Repairs cost money. Keep it running. The quota doesn't wait for anyone." },
+  { bg: 'accident', speaker: null, text: 'CRASH. The press slams down. Sparks spray across the floor.' },
+  { bg: 'accident', speaker: 'Juno', text: 'Aagh! My arm!' },
+  { bg: 'accident', speaker: 'Tinker', text: 'Juno! Somebody help her, get the medic!' },
+  { bg: 'accident', speaker: 'Boss Harrow', text: "Line three is stopped. That's lost output. Juno, it comes out of your pay." },
+  { bg: 'accident', speaker: 'Tinker', text: 'I begged him to fix it. He did nothing. And Juno is the one who pays.' },
+  { bg: 'memory', speaker: null, text: 'That night, Tinker lies awake and remembers her older sister, Ren.' },
+  { bg: 'memory', speaker: 'Ren', text: "They only stay in charge because we keep our heads down, Tink. So I'm lifting mine." },
+  { bg: 'memory', speaker: 'Tinker', text: 'Ren fought back. ...So can I.' },
+  { bg: 'night', speaker: null, text: 'Midnight. The factory hums in the dark. Three furnaces. Two guards on patrol.' },
+  { bg: 'night', speaker: 'Tinker', text: 'No more quotas tonight. Time to put out the fires.' },
+];
+
+class StoryScene extends Phaser.Scene {
+  constructor() { super('Story'); }
+
+  create() {
+    this.index = -1;
+    this.currentBg = null;
+    this.typing = false;
+    this.leaving = false;
+    this.bgObjects = [];
+
+    // Dialogue box
+    const boxY = 470;
+    this.add.rectangle(WIDTH / 2, boxY + 70, WIDTH - 60, 140, 0x140e0a, 0.94)
+      .setStrokeStyle(3, 0xb5893a).setDepth(100);
+    this.add.rectangle(WIDTH / 2, boxY + 70, WIDTH - 72, 128).setStrokeStyle(1, 0x6e5020).setDepth(100);
+    this.nameText = this.add.text(50, boxY + 12, '', {
+      fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: '#ffffff',
+    }).setDepth(101);
+    this.bodyText = this.add.text(50, boxY + 42, '', {
+      fontFamily: 'monospace', fontSize: '18px', color: '#f0e2c8',
+      wordWrap: { width: WIDTH - 110 }, lineSpacing: 6,
+    }).setDepth(101);
+    this.hint = this.add.text(WIDTH - 46, boxY + 120, 'SPACE ▶', {
+      fontFamily: 'monospace', fontSize: '13px', color: '#c9a227',
+    }).setOrigin(1, 0.5).setDepth(101);
+    this.tweens.add({ targets: this.hint, alpha: 0.3, duration: 500, yoyo: true, repeat: -1 });
+    this.add.text(WIDTH - 30, 20, 'ESC: skip story', {
+      fontFamily: 'monospace', fontSize: '12px', color: '#8a7a5e',
+    }).setOrigin(1, 0).setDepth(101);
+
+    this.input.keyboard.on('keydown-SPACE', () => this.advance());
+    this.input.keyboard.on('keydown-ESC', () => this.startMission());
+
+    this.advance();
+  }
+
+  advance() {
+    if (this.leaving) return;
+    // First press while text is typing just finishes the line
+    if (this.typing) {
+      this.typeEvent.remove();
+      this.bodyText.setText(this.fullText);
+      this.typing = false;
+      return;
+    }
+
+    this.index++;
+    if (this.index >= STORY.length) return this.startMission();
+
+    const line = STORY[this.index];
+    if (line.bg !== this.currentBg) this.drawBackdrop(line.bg);
+
+    if (line.speaker) {
+      this.nameText.setText(line.speaker).setColor(SPEAKER_COLORS[line.speaker] || '#ffffff');
+      this.bodyText.setFontStyle('normal').setColor('#f0e2c8');
+    } else {
+      this.nameText.setText('');
+      this.bodyText.setFontStyle('italic').setColor('#c2b293');
+    }
+
+    // Typewriter effect
+    this.fullText = line.text;
+    this.bodyText.setText('');
+    this.typing = true;
+    let i = 0;
+    this.typeEvent = this.time.addEvent({
+      delay: 22,
+      repeat: line.text.length - 1,
+      callback: () => {
+        i++;
+        this.bodyText.setText(line.text.slice(0, i));
+        if (i >= line.text.length) this.typing = false;
+      },
+    });
+  }
+
+  startMission() {
+    if (this.leaving) return;
+    this.leaving = true;
+    this.cameras.main.fadeOut(500, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Factory'));
+  }
+
+  // Backdrop illustrations for each part of the story
+  drawBackdrop(key) {
+    this.currentBg = key;
+    this.tweens.killTweensOf(this.bgObjects);
+    this.bgObjects.forEach((o) => o.destroy());
+    this.bgObjects = [];
+    const keep = (o) => { this.bgObjects.push(o); return o; };
+    const g = keep(this.add.graphics());
+    const person = (texKey, x, y, scale = 2) =>
+      keep(this.add.image(x, y, texKey).setOrigin(0.5, FEET_Y / CHAR_H).setScale(scale).setDepth(y));
+    const furnace = (x, baseY, scale) => {
+      keep(this.add.image(x, baseY - 25 * scale, 'glow').setTint(C.fire).setBlendMode('ADD').setScale(1.6 * scale).setAlpha(0.5));
+      keep(this.add.image(x, baseY, 'furnace').setOrigin(0.5, 1).setScale(scale));
+      const flame = keep(this.add.image(x, baseY - 10 * scale, 'flame').setOrigin(0.5, 1).setScale(0.75 * scale));
+      this.tweens.add({ targets: flame, scaleY: 0.6 * scale, alpha: 0.8, duration: 120 + Math.random() * 80, yoyo: true, repeat: -1 });
+    };
+
+    if (key === 'day' || key === 'accident') {
+      g.fillStyle(0x1d1612, 1).fillRect(0, 0, WIDTH, HEIGHT);
+      g.fillStyle(0x2a201a, 1).fillRect(0, 0, WIDTH, 300);
+      drawPipe(g, 0, 60, WIDTH, 60, 12);
+      drawPipe(g, 0, 100, WIDTH, 100, 8);
+      drawGauge(g, 650, 80);
+      keep(this.add.tileSprite(0, 300, WIDTH, 180, 'plate').setOrigin(0));
+      for (const fx of [110, 290, 780]) furnace(fx, 300, 1.6);
+
+      // The broken press on line three (drawn above the floor)
+      const slammed = key === 'accident';
+      const pg = keep(this.add.graphics());
+      pg.fillStyle(C.brassDark, 1).fillRect(470, 160, 140, 20);
+      pg.fillStyle(C.copper, 1).fillRect(480, 180, 20, 230).fillRect(580, 180, 20, 230);
+      pg.fillStyle(0x9aa3a8, 1).fillRect(500, slammed ? 360 : 210, 80, 30);
+      pg.fillStyle(0x3a2d24, 1).fillRect(470, 390, 140, 20);
+      pg.fillStyle(C.brass, 1).fillRect(470, 390, 140, 4);
+      if (!slammed) pg.lineStyle(2, 0xff4d2e, 1).lineBetween(505, 245, 520, 255).lineBetween(520, 255, 512, 265);
+      keep(this.add.text(540, 140, 'LINE 3', { fontFamily: 'monospace', fontSize: '13px', color: '#ffd43b' }).setOrigin(0.5));
+
+      person('tinker', 220, 450);
+      person('boss', 850, 450, 2.2);
+      if (slammed) {
+        keep(this.add.image(560, 445, 'juno').setScale(2).setAngle(90).setTint(0xffd0c0).setDepth(445));
+        for (let i = 0; i < 16; i++) {
+          const spark = keep(this.add.circle(540, 380, 3, 0xffd43b).setDepth(500));
+          this.tweens.add({
+            targets: spark,
+            x: 540 + Phaser.Math.Between(-140, 140),
+            y: 380 + Phaser.Math.Between(-120, 40),
+            alpha: 0, duration: 650, repeat: -1, delay: i * 40,
+          });
+        }
+        this.cameras.main.shake(300, 0.012);
+        this.cameras.main.flash(200, 255, 120, 40);
+      } else {
+        person('juno', 400, 450);
+      }
+    } else if (key === 'memory') {
+      g.fillStyle(0x1c130e, 1).fillRect(0, 0, WIDTH, HEIGHT);
+      keep(this.add.image(WIDTH / 2, 300, 'glow').setTint(0xc98a4a).setScale(4.5).setAlpha(0.35));
+      person('ren', 430, 400, 2.4).setTint(0xffe6c0);
+      person('tinker', 540, 410, 1.6).setTint(0xffe6c0);
+      keep(this.add.text(WIDTH / 2, 60, '- years ago -', {
+        fontFamily: 'monospace', fontSize: '16px', color: '#b59a6e',
+      }).setOrigin(0.5));
+    } else if (key === 'night') {
+      g.fillStyle(0x07080e, 1).fillRect(0, 0, WIDTH, HEIGHT);
+      for (let i = 0; i < 50; i++) {
+        g.fillStyle(0xfff3d6, Math.random() * 0.6 + 0.2).fillCircle(Math.random() * WIDTH, Math.random() * 220, Math.random() * 1.3 + 0.3);
+      }
+      g.fillStyle(0xf3e6c4, 1).fillCircle(830, 90, 34);
+      g.fillStyle(0x07080e, 1).fillCircle(845, 82, 30);
+      // Factory silhouette
+      g.fillStyle(0x15110e, 1).fillRect(200, 190, 560, 280);
+      g.fillRect(260, 80, 40, 110).fillRect(380, 110, 40, 80).fillRect(620, 100, 36, 90);
+      for (let i = 0; i < 6; i++) {
+        keep(this.add.image(260 + i * 85, 275, 'glow').setTint(C.fire).setBlendMode('ADD').setScale(0.7).setAlpha(0.5));
+        g.fillStyle(0xff8c1a, 0.9).fillRect(240 + i * 85, 260, 40, 30);
+        g.fillStyle(0x15110e, 1).fillRect(258 + i * 85, 260, 4, 30);
+      }
+      g.fillStyle(0x0d0a08, 1).fillRect(0, 470, WIDTH, 170);
+      for (const cx of [280, 400, 638]) {
+        keep(this.add.particles(cx, cx === 280 ? 80 : cx === 400 ? 110 : 100, 'puff', {
+          lifespan: 3000, speedX: { min: 5, max: 20 }, speedY: { min: -25, max: -12 },
+          scale: { start: 0.4, end: 1.6 }, alpha: { start: 0.25, end: 0 }, tint: 0x9a8f80, frequency: 250,
+        }));
+      }
+      person('tinker', 130, 455, 1.2);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The sneaking (and wrench-swinging) mission
+// ---------------------------------------------------------------------------
+
+class FactoryScene extends Phaser.Scene {
+  constructor() { super('Factory'); }
 
   create() {
     this.gameOver = false;
     this.won = false;
     this.sabotagedCount = 0;
+    this.hp = PLAYER_MAX_HP;
+    this.invulnUntil = 0;
+    this.knockUntil = 0;
+    this.swingReadyAt = 0;
+    this.swingStart = -9999;
+    this.facingRight = true;
 
-    // --- Floor -------------------------------------------------------------
-    this.cameras.main.setBackgroundColor('#141824');
-    const floor = this.add.graphics();
-    floor.lineStyle(1, 0x1e2433, 1);
-    for (let x = 0; x < WIDTH; x += 40) floor.lineBetween(x, 0, x, HEIGHT);
-    for (let y = 0; y < HEIGHT; y += 40) floor.lineBetween(0, y, WIDTH, y);
+    this.cameras.main.fadeIn(400, 0, 0, 0);
+    this.buildLevel();
+    this.buildFurnaces();
+    this.buildPlayer();
+    this.buildGuards();
+    this.buildAtmosphere();
+    this.buildHud();
 
-    // --- Walls (solid, block vision) ----------------------------------------
-    this.blockers = []; // Phaser.Geom.Rectangle list used for line-of-sight
-    this.wallGroup = this.physics.add.staticGroup();
-    for (const w of WALLS) {
-      const isCrate = w.w === 60 && w.h === 60;
-      const rect = this.add.rectangle(w.x + w.w / 2, w.y + w.h / 2, w.w, w.h,
-        isCrate ? 0x5a4630 : 0x3a4152);
-      rect.setStrokeStyle(2, isCrate ? 0x7a6040 : 0x4c5468);
-      this.wallGroup.add(rect);
-      this.blockers.push(new Phaser.Geom.Rectangle(w.x, w.y, w.w, w.h));
-    }
-
-    // --- Furnaces -----------------------------------------------------------
-    this.furnaces = FURNACES.map((f) => {
-      const glow = this.add.circle(f.x, f.y, 34, 0xff6a00, 0.25);
-      this.tweens.add({
-        targets: glow, alpha: 0.5, scale: 1.15,
-        duration: 400 + Math.random() * 300, yoyo: true, repeat: -1,
-      });
-      const body = this.add.rectangle(f.x, f.y, 40, 40, 0xd9480f);
-      body.setStrokeStyle(3, 0xffa94d);
-      this.wallGroup.add(body);
-      this.blockers.push(new Phaser.Geom.Rectangle(f.x - 20, f.y - 20, 40, 40));
-      return { x: f.x, y: f.y, glow, body, sabotaged: false };
-    });
-
-    // --- Player (Tinker) ----------------------------------------------------
-    this.player = this.add.circle(PLAYER_START.x, PLAYER_START.y, PLAYER_RADIUS, 0xff5fa2);
-    this.player.setStrokeStyle(2, 0xffd6e8);
-    this.physics.add.existing(this.player);
-    this.player.body.setCircle(PLAYER_RADIUS);
-    this.player.body.setCollideWorldBounds(true);
-    this.physics.add.collider(this.player, this.wallGroup);
-
-    // --- Guards -------------------------------------------------------------
-    this.guards = GUARDS.map((g) => {
-      const start = g.waypoints[0];
-      const next = g.waypoints[1];
-      return {
-        x: start.x,
-        y: start.y,
-        waypoints: g.waypoints,
-        target: 1,
-        facing: Phaser.Math.Angle.Between(start.x, start.y, next.x, next.y),
-        wait: 0,
-      };
-    });
-
-    // Graphics redrawn every frame (vision cones + guards)
-    this.coneGfx = this.add.graphics();
-    this.guardGfx = this.add.graphics();
-    this.player.setDepth(5);
-    this.guardGfx.setDepth(6);
-
-    // --- Input --------------------------------------------------------------
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D,E,R');
+  }
 
-    // --- HUD ----------------------------------------------------------------
-    const hudStyle = { fontFamily: 'monospace', fontSize: '16px', color: '#e6e6e6' };
-    this.hud = this.add.text(30, 26, '', hudStyle).setDepth(10);
-    this.add.text(WIDTH - 30, 26, 'Move: WASD / Arrows   Sabotage: E',
-      { ...hudStyle, fontSize: '13px', color: '#8a93a8' }).setOrigin(1, 0).setDepth(10);
+  // --- Setup -----------------------------------------------------------------
+
+  buildLevel() {
+    this.add.tileSprite(0, 0, WIDTH, HEIGHT, 'plate').setOrigin(0).setDepth(0);
+
+    const g = this.add.graphics().setDepth(1);
+    // Floor details: oil stains and drain grates
+    for (const [x, y, w, h] of [[150, 300, 60, 26], [620, 520, 48, 20], [820, 330, 40, 18], [400, 80, 50, 22]]) {
+      g.fillStyle(0x0c0907, 0.6).fillEllipse(x, y, w, h);
+    }
+    for (const [x, y] of [[110, 470], [490, 250], [820, 420]]) {
+      g.fillStyle(0x0c0907, 1).fillRect(x - 14, y - 14, 28, 28);
+      g.lineStyle(2, 0x4d3d2c, 1).strokeRect(x - 14, y - 14, 28, 28);
+      for (let i = -8; i <= 8; i += 6) g.lineBetween(x + i, y - 12, x + i, y + 12);
+    }
+
+    // Walls and crates (solid, block vision)
+    this.blockers = [];
+    this.wallGroup = this.physics.add.staticGroup();
+    for (const w of WALLS) {
+      if (w.crate) this.drawCrate(g, w);
+      else this.drawWall(g, w);
+      const solid = this.add.rectangle(w.x + w.w / 2, w.y + w.h / 2, w.w, w.h).setVisible(false);
+      this.wallGroup.add(solid);
+      this.blockers.push(new Phaser.Geom.Rectangle(w.x, w.y, w.w, w.h));
+    }
+    for (const [x, y] of [[210, 110], [710, 110], [450, 160], [210, 520], [710, 500], [530, 480]]) drawGauge(g, x, y);
+  }
+
+  drawWall(g, w) {
+    g.fillStyle(C.wallDark, 1).fillRect(w.x, w.y, w.w, w.h);
+    g.fillStyle(C.wall, 1).fillRect(w.x + 2, w.y + 2, w.w - 4, w.h - 4);
+    g.lineStyle(1, 0x5c4632, 1).strokeRect(w.x + 0.5, w.y + 0.5, w.w - 1, w.h - 1);
+    const horiz = w.w >= w.h;
+    g.fillStyle(C.rivet, 1);
+    if (horiz) {
+      for (let x = w.x + 6; x < w.x + w.w - 3; x += 16) g.fillCircle(x, w.y + 3.5, 1.3).fillCircle(x, w.y + w.h - 3.5, 1.3);
+      drawPipe(g, w.x, w.y + w.h / 2, w.x + w.w, w.y + w.h / 2);
+    } else {
+      for (let y = w.y + 6; y < w.y + w.h - 3; y += 16) g.fillCircle(w.x + 3.5, y, 1.3).fillCircle(w.x + w.w - 3.5, y, 1.3);
+      drawPipe(g, w.x + w.w / 2, w.y, w.x + w.w / 2, w.y + w.h);
+    }
+  }
+
+  drawCrate(g, w) {
+    g.fillStyle(0x000000, 0.35).fillRect(w.x + 4, w.y + 6, w.w, w.h);
+    g.fillStyle(0x5e3f22, 1).fillRect(w.x, w.y, w.w, w.h);
+    g.lineStyle(2, 0x45301a, 1);
+    for (let y = w.y + 15; y < w.y + w.h; y += 15) g.lineBetween(w.x, y, w.x + w.w, y);
+    g.lineStyle(5, 0x7a5532, 1).lineBetween(w.x + 4, w.y + 4, w.x + w.w - 4, w.y + w.h - 4);
+    g.lineStyle(3, 0x3a2614, 1).strokeRect(w.x, w.y, w.w, w.h);
+    for (const [cx, cy] of [[w.x, w.y], [w.x + w.w - 9, w.y], [w.x, w.y + w.h - 9], [w.x + w.w - 9, w.y + w.h - 9]]) {
+      g.fillStyle(C.brass, 1).fillRect(cx, cy, 9, 9);
+      g.fillStyle(C.brassDark, 1).fillCircle(cx + 4.5, cy + 4.5, 1.5);
+    }
+  }
+
+  buildFurnaces() {
+    this.furnaces = FURNACES.map((f) => {
+      const baseY = f.y + 22;
+      const glow = this.add.image(f.x, f.y, 'glow').setTint(C.fire).setBlendMode('ADD')
+        .setScale(1.8).setAlpha(0.55).setDepth(2);
+      const sprite = this.add.image(f.x, baseY, 'furnace').setOrigin(0.5, 1).setDepth(baseY);
+      const flame = this.add.image(f.x, f.y + 12, 'flame').setOrigin(0.5, 1).setScale(0.75).setDepth(baseY + 0.5);
+
+      const solid = this.add.rectangle(f.x, f.y, 40, 40).setVisible(false);
+      this.wallGroup.add(solid);
+      this.blockers.push(new Phaser.Geom.Rectangle(f.x - 20, f.y - 20, 40, 40));
+      return { x: f.x, y: f.y, glow, sprite, flame, sabotaged: false };
+    });
+  }
+
+  buildPlayer() {
+    this.player = this.physics.add.image(PLAYER_START.x, PLAYER_START.y, 'tinker')
+      .setOrigin(0.5, FEET_Y / CHAR_H);
+    this.player.body.setCircle(PLAYER_RADIUS, CHAR_W / 2 - PLAYER_RADIUS, FEET_Y - PLAYER_RADIUS);
+    this.player.body.setCollideWorldBounds(true);
+    this.physics.add.collider(this.player, this.wallGroup);
+    this.wrench = this.add.image(0, 0, 'wrench').setOrigin(0.05, 0.5);
+    // Faint warm light so Tinker stays readable in dark corners
+    this.playerLight = this.add.image(0, 0, 'glow').setTint(0xffd8a0).setBlendMode('ADD')
+      .setScale(1.1).setAlpha(0.22).setDepth(2);
+  }
+
+  buildGuards() {
+    this.coneGfx = this.add.graphics().setDepth(3).setBlendMode('ADD');
+    this.guards = GUARDS.map((def) => {
+      const start = def.waypoints[0];
+      const next = def.waypoints[1];
+      const sprite = this.physics.add.image(start.x, start.y, 'guard').setOrigin(0.5, FEET_Y / CHAR_H);
+      sprite.body.setCircle(GUARD_RADIUS, CHAR_W / 2 - GUARD_RADIUS, FEET_Y - GUARD_RADIUS);
+      const lantern = this.add.image(start.x, start.y, 'glow').setTint(0xffb347).setBlendMode('ADD')
+        .setScale(0.9).setAlpha(0.5).setDepth(2);
+      const icon = this.add.text(start.x, start.y, '', {
+        fontFamily: 'monospace', fontSize: '22px', fontStyle: 'bold', color: '#ffd43b',
+        stroke: '#1a0e08', strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(1900);
+      return {
+        sprite, lantern, icon,
+        waypoints: def.waypoints,
+        target: 1,
+        facing: Phaser.Math.Angle.Between(start.x, start.y, next.x, next.y),
+        state: 'patrol',     // patrol | chase | search | return | ko
+        hp: GUARD_MAX_HP,
+        wait: 0, stagger: 0, windup: 0, attackCooldown: 0,
+        trail: [], lastSeen: null, searchTime: 0, lookTime: 0, stuck: 0,
+      };
+    });
+    this.physics.add.collider(this.guards.map((g) => g.sprite), this.wallGroup);
+  }
+
+  buildAtmosphere() {
+    // Drifting steam across the whole floor
+    this.add.particles(0, 0, 'puff', {
+      emitZone: { type: 'random', source: new Phaser.Geom.Rectangle(0, 0, WIDTH, HEIGHT) },
+      lifespan: 7000, speedX: { min: 4, max: 14 }, speedY: { min: -8, max: -2 },
+      scale: { start: 1.2, end: 3 }, alpha: { start: 0, end: 0.07, ease: 'Sine.easeInOut' },
+      tint: 0xd8c8b0, frequency: 350,
+    }).setDepth(1500);
+    // Hissing pipe vents
+    for (const v of STEAM_VENTS) {
+      this.add.particles(v.x, v.y, 'puff', {
+        lifespan: 1600, speedX: { min: -15, max: 15 }, speedY: { min: -30, max: -10 },
+        scale: { start: 0.15, end: 0.9 }, alpha: { start: 0.35, end: 0 },
+        tint: 0xe8dccb, frequency: 160,
+      }).setDepth(1500);
+    }
+    // Night shadows around the edges
+    this.add.image(0, 0, 'vignette').setOrigin(0).setDepth(1800);
+  }
+
+  buildHud() {
+    this.add.rectangle(WIDTH / 2, 17, WIDTH, 34, 0x140e0a, 0.85).setDepth(2000);
+    this.add.rectangle(WIDTH / 2, 34, WIDTH, 2, 0xb5893a).setDepth(2000);
+    this.hearts = [];
+    for (let i = 0; i < PLAYER_MAX_HP; i++) {
+      this.hearts.push(this.add.image(30 + i * 28, 17, 'heart').setDepth(2001));
+    }
+    const style = { fontFamily: 'monospace', fontSize: '16px', color: '#e2bd55' };
+    this.hud = this.add.text(130, 17, '', style).setOrigin(0, 0.5).setDepth(2001);
+    this.add.text(WIDTH - 20, 17, 'Move: WASD/Arrows   Swing: Space   Sabotage: E',
+      { ...style, fontSize: '13px', color: '#a8916a' }).setOrigin(1, 0.5).setDepth(2001);
     this.prompt = this.add.text(0, 0, '[E] Sabotage', {
       fontFamily: 'monospace', fontSize: '13px', color: '#fff3bf',
-      backgroundColor: '#000000aa', padding: { x: 4, y: 2 },
-    }).setOrigin(0.5).setDepth(10).setVisible(false);
+      backgroundColor: '#1a0e08cc', padding: { x: 4, y: 2 },
+    }).setOrigin(0.5).setDepth(2001).setVisible(false);
     this.banner = this.add.text(WIDTH / 2, HEIGHT / 2, '', {
-      fontFamily: 'monospace', fontSize: '36px', color: '#ffffff', align: 'center',
-      backgroundColor: '#000000cc', padding: { x: 24, y: 16 },
-    }).setOrigin(0.5).setDepth(20).setVisible(false);
-
+      fontFamily: 'monospace', fontSize: '34px', color: '#ffffff', align: 'center',
+      backgroundColor: '#140e0ae6', padding: { x: 24, y: 16 },
+    }).setOrigin(0.5).setDepth(2100).setVisible(false);
     this.updateHud();
   }
 
+  // --- Main loop -------------------------------------------------------------
+
   update(time, delta) {
     const dt = delta / 1000;
+    this.flickerFurnaces();
 
     if (this.won) {
       if (Phaser.Input.Keyboard.JustDown(this.keys.R)) this.scene.restart();
-      this.drawGuards();
+      this.updateVisuals(time);
       return;
     }
     if (this.gameOver) return;
 
-    this.handlePlayerMovement();
-    this.updateGuards(dt);
-    this.drawGuards();
+    this.handlePlayerMovement(time);
+    this.handleSwing(time);
+    this.updateGuards(dt, time);
+    this.drawCones();
+    this.updateVisuals(time);
     this.handleSabotage();
-    this.checkDetection();
   }
 
-  // ---------------------------------------------------------------------------
-  handlePlayerMovement() {
+  handlePlayerMovement(time) {
+    if (time < this.knockUntil) return; // being knocked back
     let vx = 0, vy = 0;
     if (this.cursors.left.isDown || this.keys.A.isDown) vx -= 1;
     if (this.cursors.right.isDown || this.keys.D.isDown) vx += 1;
     if (this.cursors.up.isDown || this.keys.W.isDown) vy -= 1;
     if (this.cursors.down.isDown || this.keys.S.isDown) vy += 1;
+    if (vx !== 0) this.facingRight = vx > 0;
     const v = new Phaser.Math.Vector2(vx, vy).normalize().scale(PLAYER_SPEED);
     this.player.body.setVelocity(v.x, v.y);
   }
 
-  updateGuards(dt) {
+  // --- Combat ----------------------------------------------------------------
+
+  handleSwing(time) {
+    if (!Phaser.Input.Keyboard.JustDown(this.cursors.space) || time < this.swingReadyAt) return;
+    this.swingReadyAt = time + WRENCH_COOLDOWN_MS;
+    this.swingStart = time;
+
+    const p = this.player;
+    let target = null, best = WRENCH_RANGE;
     for (const g of this.guards) {
-      if (g.wait > 0) {
-        g.wait -= dt;
-        // glance around a little while paused
-        g.facing += Math.sin(this.time.now / 300) * 0.02;
+      if (g.state === 'ko') continue;
+      const d = Phaser.Math.Distance.Between(p.x, p.y, g.sprite.x, g.sprite.y);
+      if (d <= best) { best = d; target = g; }
+    }
+    if (target) {
+      this.facingRight = target.sprite.x >= p.x;
+      this.hitGuard(target);
+    }
+  }
+
+  hitGuard(g) {
+    const s = g.sprite, p = this.player;
+    const angleFromGuard = Phaser.Math.Angle.Between(s.x, s.y, p.x, p.y);
+    const unaware = g.state === 'patrol' || g.state === 'return';
+    const behind = Math.abs(Phaser.Math.Angle.Wrap(angleFromGuard - g.facing)) > SNEAK_ANGLE;
+
+    this.sparks((s.x + p.x) / 2, (s.y + p.y) / 2 - 20);
+    this.cameras.main.shake(90, 0.005);
+
+    if (unaware && behind) {
+      g.hp = 0;
+      this.floatText(s.x, s.y - 60, 'SNEAK ATTACK!', '#ffd43b');
+    } else {
+      g.hp -= 1;
+      this.floatText(s.x, s.y - 60, 'CLANG!', '#ffffff');
+    }
+
+    if (g.hp <= 0) return this.knockOut(g);
+
+    // Survived: stagger, get knocked back, and turn on Tinker
+    g.stagger = 0.45;
+    g.windup = 0;
+    g.facing = angleFromGuard;
+    s.setTint(0xff7766);
+    this.time.delayedCall(150, () => { if (g.state !== 'ko') s.clearTint(); });
+    s.body.setVelocity(-Math.cos(angleFromGuard) * 220, -Math.sin(angleFromGuard) * 220);
+    this.spot(g);
+  }
+
+  knockOut(g) {
+    const s = g.sprite;
+    g.state = 'ko';
+    s.body.setVelocity(0, 0);
+    s.body.enable = false;
+    s.setTint(0x8a8a8a).setDepth(s.y - 10);
+    this.tweens.add({ targets: s, angle: 90, duration: 250, ease: 'Back.easeOut' });
+    g.lantern.setScale(0.5).setAlpha(0.2);
+    g.icon.setText('z Z').setColor('#a8a8a8').setFontSize(16);
+    this.tweens.add({ targets: g.icon, alpha: 0.3, duration: 700, yoyo: true, repeat: -1 });
+    this.floatText(s.x, s.y - 40, 'KNOCKED OUT', '#c9a227');
+  }
+
+  hurtPlayer(g) {
+    if (this.time.now < this.invulnUntil || this.gameOver) return;
+    this.hp -= 1;
+    this.updateHud();
+    this.invulnUntil = this.time.now + INVULN_MS;
+    this.knockUntil = this.time.now + 180;
+
+    const p = this.player;
+    const a = Phaser.Math.Angle.Between(g.sprite.x, g.sprite.y, p.x, p.y);
+    p.body.setVelocity(Math.cos(a) * 280, Math.sin(a) * 280);
+    p.setTint(0xff5544);
+    this.time.delayedCall(160, () => p.clearTint());
+    this.cameras.main.shake(160, 0.01);
+    this.floatText(p.x, p.y - 56, '-1', '#ff6b6b');
+
+    if (this.hp <= 0) this.defeated();
+  }
+
+  // --- Guard AI --------------------------------------------------------------
+
+  updateGuards(dt) {
+    const p = this.player;
+    for (const g of this.guards) {
+      if (g.state === 'ko') continue;
+      const s = g.sprite;
+      g.attackCooldown = Math.max(0, g.attackCooldown - dt);
+
+      if (g.stagger > 0) {
+        g.stagger -= dt;
+        s.body.velocity.scale(0.85);
         continue;
       }
-      const wp = g.waypoints[g.target];
-      const desired = Phaser.Math.Angle.Between(g.x, g.y, wp.x, wp.y);
-      g.facing = Phaser.Math.Angle.RotateTo(g.facing, desired, 3 * dt);
 
-      // Only walk once roughly facing the target
-      if (Math.abs(Phaser.Math.Angle.Wrap(desired - g.facing)) < 0.15) {
-        const dist = Phaser.Math.Distance.Between(g.x, g.y, wp.x, wp.y);
-        const step = GUARD_SPEED * dt;
-        if (dist <= step) {
-          g.x = wp.x;
-          g.y = wp.y;
-          g.target = (g.target + 1) % g.waypoints.length;
-          g.wait = 0.8;
-        } else {
-          g.x += Math.cos(desired) * step;
-          g.y += Math.sin(desired) * step;
-        }
+      const dist = Phaser.Math.Distance.Between(s.x, s.y, p.x, p.y);
+      const touching = dist < GUARD_RADIUS + PLAYER_RADIUS + 4;
+
+      switch (g.state) {
+        case 'patrol':
+          this.patrol(g, dt);
+          if (touching || this.canSee(g)) this.spot(g);
+          break;
+        case 'chase':
+          this.chase(g, dt, dist);
+          break;
+        case 'search':
+          this.search(g, dt);
+          if (touching || this.canSee(g)) this.spot(g);
+          break;
+        case 'return':
+          this.returnToPost(g, dt);
+          if (touching || this.canSee(g)) this.spot(g);
+          break;
       }
     }
   }
 
-  drawGuards() {
-    const cone = this.coneGfx;
-    const gfx = this.guardGfx;
-    cone.clear();
-    gfx.clear();
-
-    for (const g of this.guards) {
-      // Vision cone via raycasting so walls cut it off
-      const color = this.gameOver ? 0xff3b3b : 0xffe066;
-      cone.fillStyle(color, this.gameOver ? 0.35 : 0.18);
-      cone.beginPath();
-      cone.moveTo(g.x, g.y);
-      for (let i = 0; i <= VISION_RAYS; i++) {
-        const a = g.facing - VISION_HALF_ANGLE + (i / VISION_RAYS) * VISION_HALF_ANGLE * 2;
-        const len = this.castRay(g.x, g.y, a, VISION_RANGE);
-        cone.lineTo(g.x + Math.cos(a) * len, g.y + Math.sin(a) * len);
-      }
-      cone.closePath();
-      cone.fillPath();
-
-      // Guard body + facing marker
-      gfx.fillStyle(0x3b82f6, 1);
-      gfx.fillCircle(g.x, g.y, GUARD_RADIUS);
-      gfx.lineStyle(2, 0xbfdbfe, 1);
-      gfx.strokeCircle(g.x, g.y, GUARD_RADIUS);
-      gfx.fillStyle(0xffffff, 1);
-      gfx.fillCircle(g.x + Math.cos(g.facing) * 8, g.y + Math.sin(g.facing) * 8, 3);
+  spot(g) {
+    if (g.state !== 'chase') {
+      if (g.state === 'patrol') g.trail = [{ x: g.sprite.x, y: g.sprite.y }];
+      g.state = 'chase';
+      g.icon.setText('!').setColor('#ff4d2e');
+      g.icon.setScale(1.8);
+      this.tweens.add({ targets: g.icon, scale: 1, duration: 200, ease: 'Back.easeOut' });
     }
+    g.lastSeen = { x: this.player.x, y: this.player.y };
+  }
+
+  // Walk toward a point; returns true once arrived
+  walkTo(g, tx, ty, speed, dt) {
+    const s = g.sprite;
+    const dist = Phaser.Math.Distance.Between(s.x, s.y, tx, ty);
+    if (dist <= Math.max(4, speed * dt)) {
+      s.body.reset(tx, ty);
+      return true;
+    }
+    const a = Phaser.Math.Angle.Between(s.x, s.y, tx, ty);
+    g.facing = Phaser.Math.Angle.RotateTo(g.facing, a, 6 * dt);
+    s.body.setVelocity(Math.cos(a) * speed, Math.sin(a) * speed);
+    return false;
+  }
+
+  patrol(g, dt) {
+    const s = g.sprite;
+    if (g.wait > 0) {
+      g.wait -= dt;
+      s.body.setVelocity(0, 0);
+      g.facing += Math.sin(this.time.now / 300) * 0.02; // glance around
+      return;
+    }
+    const wp = g.waypoints[g.target];
+    const desired = Phaser.Math.Angle.Between(s.x, s.y, wp.x, wp.y);
+    g.facing = Phaser.Math.Angle.RotateTo(g.facing, desired, 3 * dt);
+    if (Math.abs(Phaser.Math.Angle.Wrap(desired - g.facing)) > 0.15) {
+      s.body.setVelocity(0, 0); // turn before walking
+      return;
+    }
+    if (this.walkTo(g, wp.x, wp.y, GUARD_SPEED, dt)) {
+      g.target = (g.target + 1) % g.waypoints.length;
+      g.wait = 0.8;
+    }
+  }
+
+  recordTrail(g) {
+    const s = g.sprite;
+    const last = g.trail[g.trail.length - 1];
+    if (!last || Phaser.Math.Distance.Between(last.x, last.y, s.x, s.y) > 24) g.trail.push({ x: s.x, y: s.y });
+  }
+
+  chase(g, dt, dist) {
+    const s = g.sprite, p = this.player;
+    const visible = dist < VISION_RANGE * 1.5 && this.hasLineOfSight(s.x, s.y, p.x, p.y);
+    if (!visible) {
+      g.state = 'search';
+      g.searchTime = 0;
+      g.lookTime = 0;
+      g.windup = 0;
+      s.clearTint();
+      g.icon.setText('?').setColor('#ffd43b');
+      return;
+    }
+    g.lastSeen = { x: p.x, y: p.y };
+    this.recordTrail(g);
+
+    const a = Phaser.Math.Angle.Between(s.x, s.y, p.x, p.y);
+    g.facing = Phaser.Math.Angle.RotateTo(g.facing, a, 8 * dt);
+
+    // Winding up an attack: stand still, then strike if she's still close
+    if (g.windup > 0) {
+      s.body.setVelocity(0, 0);
+      g.windup -= dt;
+      if (g.windup <= 0) {
+        s.clearTint();
+        g.attackCooldown = GUARD_ATTACK_COOLDOWN;
+        this.tweens.add({ targets: s, x: s.x + Math.cos(a) * 8, y: s.y + Math.sin(a) * 8, duration: 70, yoyo: true });
+        if (dist <= GUARD_ATTACK_RANGE + 10) this.hurtPlayer(g);
+      }
+      return;
+    }
+
+    if (dist <= GUARD_ATTACK_RANGE) {
+      s.body.setVelocity(0, 0);
+      if (g.attackCooldown <= 0) {
+        g.windup = GUARD_ATTACK_WINDUP;
+        s.setTint(0xffa060);
+      }
+    } else {
+      s.body.setVelocity(Math.cos(a) * GUARD_CHASE_SPEED, Math.sin(a) * GUARD_CHASE_SPEED);
+    }
+  }
+
+  search(g, dt) {
+    const s = g.sprite;
+    this.recordTrail(g);
+    g.searchTime += dt;
+    const arrived = Phaser.Math.Distance.Between(s.x, s.y, g.lastSeen.x, g.lastSeen.y) <= 6;
+    if (!arrived && g.searchTime < 3) {
+      this.walkTo(g, g.lastSeen.x, g.lastSeen.y, GUARD_CHASE_SPEED * 0.8, dt);
+      return;
+    }
+    // Look around, then give up
+    s.body.setVelocity(0, 0);
+    g.lookTime += dt;
+    g.facing += Math.cos(g.lookTime * 3) * 2.5 * dt;
+    if (g.lookTime > 1.8) {
+      g.state = 'return';
+      g.stuck = 0;
+      g.icon.setText('');
+    }
+  }
+
+  // Retrace the steps taken while chasing, back to the patrol route
+  returnToPost(g, dt) {
+    if (!g.trail.length) {
+      g.state = 'patrol';
+      return;
+    }
+    const t = g.trail[g.trail.length - 1];
+    if (this.walkTo(g, t.x, t.y, GUARD_SPEED, dt)) {
+      g.trail.pop();
+      g.stuck = 0;
+    } else if ((g.stuck += dt) > 2.5) {
+      g.trail.pop();
+      g.stuck = 0;
+    }
+  }
+
+  canSee(g) {
+    const s = g.sprite, p = this.player;
+    const dist = Phaser.Math.Distance.Between(s.x, s.y, p.x, p.y);
+    if (dist > VISION_RANGE + PLAYER_RADIUS) return false;
+    const angleTo = Phaser.Math.Angle.Between(s.x, s.y, p.x, p.y);
+    if (Math.abs(Phaser.Math.Angle.Wrap(angleTo - g.facing)) > VISION_HALF_ANGLE) return false;
+    return this.hasLineOfSight(s.x, s.y, p.x, p.y);
   }
 
   castRay(x, y, angle, maxLen) {
     const cos = Math.cos(angle), sin = Math.sin(angle);
     for (let d = 0; d < maxLen; d += 4) {
       const px = x + cos * d, py = y + sin * d;
-      for (const r of this.blockers) {
-        if (r.contains(px, py)) return d;
-      }
+      for (const r of this.blockers) if (r.contains(px, py)) return d;
     }
     return maxLen;
   }
 
   hasLineOfSight(x1, y1, x2, y2) {
     const line = new Phaser.Geom.Line(x1, y1, x2, y2);
-    for (const r of this.blockers) {
-      if (Phaser.Geom.Intersects.LineToRectangle(line, r)) return false;
-    }
+    for (const r of this.blockers) if (Phaser.Geom.Intersects.LineToRectangle(line, r)) return false;
     return true;
   }
 
-  // ---------------------------------------------------------------------------
-  handleSabotage() {
-    const px = this.player.x, py = this.player.y;
-    let nearest = null;
+  // --- Rendering -------------------------------------------------------------
+
+  drawCones() {
+    const cone = this.coneGfx;
+    cone.clear();
+    for (const g of this.guards) {
+      if (g.state === 'ko') continue;
+      const s = g.sprite;
+      const color = g.state === 'chase' ? 0xff4d2e : g.state === 'search' ? 0xff9a3c : 0xffc66d;
+      cone.fillStyle(color, g.state === 'chase' ? 0.22 : 0.15);
+      cone.beginPath();
+      cone.moveTo(s.x, s.y);
+      for (let i = 0; i <= VISION_RAYS; i++) {
+        const a = g.facing - VISION_HALF_ANGLE + (i / VISION_RAYS) * VISION_HALF_ANGLE * 2;
+        const len = this.castRay(s.x, s.y, a, VISION_RANGE);
+        cone.lineTo(s.x + Math.cos(a) * len, s.y + Math.sin(a) * len);
+      }
+      cone.closePath();
+      cone.fillPath();
+    }
+  }
+
+  updateVisuals(time) {
+    const p = this.player;
+    p.setDepth(p.y).setFlipX(!this.facingRight);
+    this.playerLight.setPosition(p.x, p.y - 12);
+    p.setAlpha(time < this.invulnUntil ? (Math.floor(time / 80) % 2 ? 0.35 : 1) : 1);
+
+    // Wrench: resting over the shoulder, swings down on Space
+    const e = time - this.swingStart;
+    const swing = e < 110 ? e / 110 : e < 320 ? 1 - (e - 110) / 210 : 0;
+    const deg = -70 + swing * 150;
+    const side = this.facingRight ? 1 : -1;
+    this.wrench.setPosition(p.x + side * 12, p.y - 6)
+      .setAngle(this.facingRight ? deg : 180 - deg)
+      .setFlipY(!this.facingRight)
+      .setDepth(p.y + 1)
+      .setAlpha(p.alpha);
+
+    for (const g of this.guards) {
+      const s = g.sprite;
+      if (g.state === 'ko') {
+        g.icon.setPosition(s.x + 18, s.y - 30);
+        continue;
+      }
+      g.icon.setPosition(s.x, s.y - 62);
+      s.setDepth(s.y);
+      const c = Math.cos(g.facing);
+      if (c < -0.2) s.setFlipX(true);
+      else if (c > 0.2) s.setFlipX(false);
+      g.lantern.setPosition(s.x + (s.flipX ? -16 : 16), s.y + 3).setAlpha(0.42 + Math.random() * 0.1);
+    }
+  }
+
+  flickerFurnaces() {
     for (const f of this.furnaces) {
       if (f.sabotaged) continue;
-      if (Phaser.Math.Distance.Between(px, py, f.x, f.y) < SABOTAGE_DISTANCE) {
-        nearest = f;
-        break;
-      }
+      f.flame.setScale(0.7 + Math.random() * 0.08, 0.65 + Math.random() * 0.2);
+      f.flame.setAlpha(0.85 + Math.random() * 0.15);
+      f.glow.setAlpha(0.45 + Math.random() * 0.15);
     }
+  }
 
-    if (nearest) {
-      this.prompt.setPosition(nearest.x, nearest.y - 38).setVisible(true);
-      if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.sabotage(nearest);
+  sparks(x, y) {
+    for (let i = 0; i < 8; i++) {
+      const s = this.add.circle(x, y, 2.5, i % 2 ? 0xffd43b : 0xff9a3c).setDepth(1950);
+      this.tweens.add({
+        targets: s, x: x + Phaser.Math.Between(-30, 30), y: y + Phaser.Math.Between(-30, 20),
+        alpha: 0, duration: 300, onComplete: () => s.destroy(),
+      });
+    }
+  }
+
+  floatText(x, y, text, color) {
+    const t = this.add.text(x, y, text, {
+      fontFamily: 'monospace', fontSize: '15px', fontStyle: 'bold', color,
+      stroke: '#1a0e08', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(1960);
+    this.tweens.add({ targets: t, y: y - 26, alpha: 0, duration: 900, onComplete: () => t.destroy() });
+  }
+
+  // --- Furnaces --------------------------------------------------------------
+
+  handleSabotage() {
+    const p = this.player;
+    const near = this.furnaces.find((f) =>
+      !f.sabotaged && Phaser.Math.Distance.Between(p.x, p.y, f.x, f.y) < SABOTAGE_DISTANCE);
+
+    if (near) {
+      this.prompt.setPosition(near.x, near.y - 62).setVisible(true);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.sabotage(near);
     } else {
       this.prompt.setVisible(false);
     }
@@ -288,59 +1095,60 @@ class FactoryScene extends Phaser.Scene {
 
   sabotage(f) {
     f.sabotaged = true;
-    this.tweens.killTweensOf(f.glow);
+    f.flame.setVisible(false);
     f.glow.setVisible(false);
-    f.body.setFillStyle(0x343a40);
-    f.body.setStrokeStyle(3, 0x6c757d);
-    this.add.text(f.x, f.y, 'X', { fontFamily: 'monospace', fontSize: '22px', color: '#adb5bd' })
-      .setOrigin(0.5);
-    this.cameras.main.shake(120, 0.004);
+    f.sprite.setTint(0x6a6a6a);
     this.prompt.setVisible(false);
+    this.cameras.main.shake(120, 0.004);
+
+    // A last hiss of smoke as the fire dies
+    const smoke = this.add.particles(f.x, f.y - 10, 'puff', {
+      lifespan: 1400, speed: { min: 20, max: 60 }, angle: { min: 230, max: 310 },
+      scale: { start: 0.3, end: 1.2 }, alpha: { start: 0.5, end: 0 }, tint: 0x8a8580, emitting: false,
+    }).setDepth(1600);
+    smoke.explode(16);
+    this.time.delayedCall(1600, () => smoke.destroy());
 
     this.sabotagedCount++;
     this.updateHud();
-
     if (this.sabotagedCount === this.furnaces.length) this.winLevel();
   }
 
-  checkDetection() {
-    const px = this.player.x, py = this.player.y;
+  // --- Outcomes --------------------------------------------------------------
+
+  stopEveryone() {
+    this.player.body.setVelocity(0, 0);
+    this.prompt.setVisible(false);
     for (const g of this.guards) {
-      const dist = Phaser.Math.Distance.Between(g.x, g.y, px, py);
-
-      // Bumping into a guard always counts as caught
-      if (dist < GUARD_RADIUS + PLAYER_RADIUS) return this.caught();
-
-      if (dist > VISION_RANGE + PLAYER_RADIUS) continue;
-      const angleTo = Phaser.Math.Angle.Between(g.x, g.y, px, py);
-      const diff = Math.abs(Phaser.Math.Angle.Wrap(angleTo - g.facing));
-      if (diff > VISION_HALF_ANGLE) continue;
-      if (this.hasLineOfSight(g.x, g.y, px, py)) return this.caught();
+      if (g.state === 'ko') continue;
+      g.sprite.body.setVelocity(0, 0);
+      g.sprite.clearTint();
     }
   }
 
-  caught() {
+  defeated() {
     this.gameOver = true;
-    this.player.body.setVelocity(0, 0);
-    this.prompt.setVisible(false);
-    this.drawGuards(); // redraw cones in red
-    this.player.setFillStyle(0xff3b3b);
+    this.stopEveryone();
+    this.player.setAlpha(1).setTint(0x9a6a6a);
+    this.tweens.add({ targets: [this.player, this.wrench], angle: '+=90', duration: 300 });
     this.cameras.main.flash(250, 255, 40, 40);
-    this.banner.setText('SPOTTED!\nRestarting...').setColor('#ff6b6b').setVisible(true);
-    this.time.delayedCall(1300, () => this.scene.restart());
+    this.banner.setText('TINKER IS DOWN!\nRestarting...').setColor('#ff6b6b').setVisible(true);
+    this.time.delayedCall(1600, () => this.scene.restart());
   }
 
   winLevel() {
     this.won = true;
-    this.player.body.setVelocity(0, 0);
+    this.stopEveryone();
+    this.coneGfx.clear();
     this.banner
       .setText('ALL FURNACES SABOTAGED!\nTinker escapes into the night.\n\nPress R to play again')
       .setFontSize(28)
-      .setColor('#8ce99a')
+      .setColor('#e2bd55')
       .setVisible(true);
   }
 
   updateHud() {
+    this.hearts.forEach((h, i) => h.setTexture(i < this.hp ? 'heart' : 'heart_empty'));
     this.hud.setText(`Furnaces sabotaged: ${this.sabotagedCount} / ${this.furnaces.length}`);
   }
 }
@@ -350,9 +1158,10 @@ new Phaser.Game({
   parent: 'game',
   width: WIDTH,
   height: HEIGHT,
+  backgroundColor: '#140e0a',
   physics: { default: 'arcade', arcade: { debug: false } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: FactoryScene,
+  scene: [BootScene, StoryScene, FactoryScene],
 });
 </script>
 </body>
