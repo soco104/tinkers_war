@@ -5,7 +5,9 @@
 *.unitypackage
 
 # The raw asset packs. Only the images the game uses are copied into art/ and committed.
-assets/
+# The credits and license files in assets/licenses/ are kept.
+assets/*
+!assets/licenses/
 
 # Temporary working files
 scratchpad/

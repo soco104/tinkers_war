@@ -86,13 +86,6 @@ const C = {
 // ---------------------------------------------------------------------------
 const PX = 2; // on-screen size of one art pixel
 
-// Shown on the win screen (full details in CREDITS.md)
-const CREDITS = [
-  'Graphics created by Penzilla Design (Top-Down Retro Interior)',
-  'Health bar: "Steampunk HP Bars" by mental.bloxx  |  Effects: "Free Ambient Effects" by SovDigital',
-  'Also: Old House tile set, Junkyard_1, Animated Gears (see CREDITS.md)',
-];
-
 const IMAGES = {
   retro_floors: 'art/interior/retro_floors_walls.png',     // Top-Down Retro Interior (Penzilla Design)
   retro_doors: 'art/interior/retro_doors_windows.png',
@@ -1876,12 +1869,7 @@ class FactoryScene extends Phaser.Scene {
       .setText('ALL FURNACES SABOTAGED!\nTinker escapes into the night.\n\nPress R to play again')
       .setFontSize(28)
       .setColor('#e2bd55')
-      .setVisible(true);
-    this.add.text(WIDTH / 2, HEIGHT - 16, CREDITS.join('\n'), {
-      fontFamily: 'monospace', fontSize: '11px', color: '#a8916a', align: 'center',
-      backgroundColor: '#140e0acc', padding: { x: 8, y: 4 },
-    }).setOrigin(0.5, 1).setDepth(2100);
-  }
+      .setVisible(true);  }
 
   // Reveal the full tube up to the current health; the empty tube shows through beyond it
   drawHpBar(value) {

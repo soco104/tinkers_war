@@ -1,0 +1,83 @@
+TINKER'S WAR - ASSET CREDITS
+============================
+
+Every asset pack in the assets folder, who made it, and its terms.
+"In game: yes" means images from the pack are used by the game (copied into art/).
+License files supplied with the packs are kept in this folder.
+
+
+TOP-DOWN RETRO INTERIOR                                              In game: yes
+  Author:   Cille Rosenoern Abildhauge, published by Penzilla Design
+            https://PenzillaDesign.com  -  PenzillaDesign@gmail.com
+  Credit:   "Graphics created by Penzilla Design"  (mandatory)
+  License:  Top-Down_Retro_Interior - Penzilla Design Standard License.pdf
+  Terms:    Royalty-free for one project with credit. No redistribution or resale of the
+            files. Edits must be listed alongside the credit. If the game is made public,
+            send a link to PenzillaDesign@gmail.com.
+  Edits:    Sprites are cut from the sheets and scaled 2x at runtime; floors, walls and
+            props are tinted darker. The image files themselves are unmodified.
+
+
+STEAMPUNK HP BARS                                                    In game: yes
+  Author:   mental.bloxx  (Instagram @mental.bloxx, Twitch MentalBloxx)
+  Credit:   Required ("Please be sure to credit me for the HP bars")
+  License:  Steampunk_HP_Bars - mental.bloxx HELLO THERE (credit terms).pdf
+  Used:     Version 1, sheets A (full) and G (empty), for Tinker's health gauge.
+
+
+FREE AMBIENT EFFECTS                                                 In game: yes
+  Author:   SovDigital  -  https://sovdigital.itch.io
+  Credit:   Appreciated, not required
+  License:  Free_Ambient_Effects - SovDigital LICENSE.txt
+  Terms:    Personal and commercial games allowed. No redistribution of the graphics as
+            stand-alone assets. Not to be used for machine-learning datasets or NFTs.
+  Used:     steam vent, smoke column, sparks burst, ember burst, ember swirl, dust swirl,
+            light shafts overlay.
+
+
+OLD HOUSE TILE SET                                                   In game: yes
+  Author:   Not recorded in the pack (no license or readme included)
+  Used:     Wallpaper, workbench, counter, chair, bucket, crates, rug, wall pipe.
+  Note:     Add the author and license from where the pack was downloaded.
+
+
+JUNKYARD_1                                                           In game: yes
+  Author:   Not recorded (single image, no license or readme included)
+  Used:     Junk piles, oil drums (hazard drums), crates. A hazard band is painted onto
+            the oil drum at runtime.
+  Note:     Add the author and license from where the image was downloaded.
+
+
+ANIMATED GEARS                                                       In game: yes
+  Author:   Not recorded in the pack (no license or readme included)
+  Used:     Set 8, every 10th frame, for the spinning wall gears.
+  Note:     Add the author and license from where the pack was downloaded.
+
+
+STEAMPUNK & FANTASY UI PACK                                          In game: no
+  Author:   Scott Jenkins  -  https://twitter.com/positronplays
+  License:  Steampunk-FantasyUIPack - Scott Jenkins ReadMe (usage terms).txt
+  Terms:    "for free use in your projects"
+
+
+2D STEAMPUNK WORLD                                                   In game: no
+  Author:   Not recorded in the pack (no license file inside the pack)
+
+
+SPRITES_STEAMPUNK (weapons, armor, shields, ammo, syringes)          In game: no
+  Author:   Not recorded in the pack (no license or readme included)
+
+
+STEAMPUNK BG (56 painted backgrounds)                                In game: no
+  Author:   Not recorded in the pack (no license or readme included)
+
+
+32x32_STEAMPUNK_COGS, PALETTE                                        In game: no
+  Author:   Not recorded (single images, no license included)
+
+
+ATTACKS (animated top-down character)                                In game: no
+  Author:   Not recorded in the pack (no license or readme included)
+
+
+Phaser 3 (game framework): MIT License, Photon Storm Ltd.  https://phaser.io
