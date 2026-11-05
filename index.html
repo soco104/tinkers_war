@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tinker's War</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: #05060a;
+      overflow: hidden;
+    }
+    #game { width: 100%; height: 100%; }
+    #game canvas { display: block; box-shadow: 0 0 40px #000; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
+</head>
+<body>
+  <div id="game"></div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Tinker's War — a tiny top-down stealth prototype
+// ---------------------------------------------------------------------------
+
+const WIDTH = 960;
+const HEIGHT = 640;
+
+const PLAYER_SPEED = 160;
+const PLAYER_RADIUS = 11;
+const GUARD_SPEED = 70;
+const GUARD_RADIUS = 13;
+const VISION_RANGE = 170;
+const VISION_HALF_ANGLE = Phaser.Math.DegToRad(30);
+const VISION_RAYS = 40;
+const SABOTAGE_DISTANCE = 50;
+
+// Level layout: walls and crates as {x, y, w, h} (top-left corner)
+const WALLS = [
+  // outer walls
+  { x: 0,   y: 0,   w: 960, h: 20 },
+  { x: 0,   y: 620, w: 960, h: 20 },
+  { x: 0,   y: 0,   w: 20,  h: 640 },
+  { x: 940, y: 0,   w: 20,  h: 640 },
+  // inner walls
+  { x: 200, y: 20,  w: 20,  h: 220 },
+  { x: 200, y: 380, w: 20,  h: 240 },
+  { x: 420, y: 150, w: 140, h: 20 },
+  { x: 420, y: 470, w: 140, h: 20 },
+  { x: 700, y: 20,  w: 20,  h: 200 },
+  { x: 700, y: 340, w: 20,  h: 280 },
+  // crates
+  { x: 330, y: 290, w: 60,  h: 60 },
+  { x: 580, y: 290, w: 60,  h: 60 },
+];
+
+const FURNACES = [
+  { x: 100, y: 90 },
+  { x: 490, y: 560 },
+  { x: 870, y: 60 },
+];
+
+const PLAYER_START = { x: 80, y: 560 };
+
+const GUARDS = [
+  { waypoints: [{ x: 300, y: 220 }, { x: 670, y: 220 }, { x: 670, y: 420 }, { x: 300, y: 420 }] },
+  { waypoints: [{ x: 780, y: 180 }, { x: 890, y: 180 }, { x: 890, y: 560 }, { x: 780, y: 560 }] },
+];
+
+class FactoryScene extends Phaser.Scene {
+  constructor() {
+    super('Factory');
+  }
+
+  create() {
+    this.gameOver = false;
+    this.won = false;
+    this.sabotagedCount = 0;
+
+    // --- Floor -------------------------------------------------------------
+    this.cameras.main.setBackgroundColor('#141824');
+    const floor = this.add.graphics();
+    floor.lineStyle(1, 0x1e2433, 1);
+    for (let x = 0; x < WIDTH; x += 40) floor.lineBetween(x, 0, x, HEIGHT);
+    for (let y = 0; y < HEIGHT; y += 40) floor.lineBetween(0, y, WIDTH, y);
+
+    // --- Walls (solid, block vision) ----------------------------------------
+    this.blockers = []; // Phaser.Geom.Rectangle list used for line-of-sight
+    this.wallGroup = this.physics.add.staticGroup();
+    for (const w of WALLS) {
+      const isCrate = w.w === 60 && w.h === 60;
+      const rect = this.add.rectangle(w.x + w.w / 2, w.y + w.h / 2, w.w, w.h,
+        isCrate ? 0x5a4630 : 0x3a4152);
+      rect.setStrokeStyle(2, isCrate ? 0x7a6040 : 0x4c5468);
+      this.wallGroup.add(rect);
+      this.blockers.push(new Phaser.Geom.Rectangle(w.x, w.y, w.w, w.h));
+    }
+
+    // --- Furnaces -----------------------------------------------------------
+    this.furnaces = FURNACES.map((f) => {
+      const glow = this.add.circle(f.x, f.y, 34, 0xff6a00, 0.25);
+      this.tweens.add({
+        targets: glow, alpha: 0.5, scale: 1.15,
+        duration: 400 + Math.random() * 300, yoyo: true, repeat: -1,
+      });
+      const body = this.add.rectangle(f.x, f.y, 40, 40, 0xd9480f);
+      body.setStrokeStyle(3, 0xffa94d);
+      this.wallGroup.add(body);
+      this.blockers.push(new Phaser.Geom.Rectangle(f.x - 20, f.y - 20, 40, 40));
+      return { x: f.x, y: f.y, glow, body, sabotaged: false };
+    });
+
+    // --- Player (Tinker) ----------------------------------------------------
+    this.player = this.add.circle(PLAYER_START.x, PLAYER_START.y, PLAYER_RADIUS, 0xff5fa2);
+    this.player.setStrokeStyle(2, 0xffd6e8);
+    this.physics.add.existing(this.player);
+    this.player.body.setCircle(PLAYER_RADIUS);
+    this.player.body.setCollideWorldBounds(true);
+    this.physics.add.collider(this.player, this.wallGroup);
+
+    // --- Guards -------------------------------------------------------------
+    this.guards = GUARDS.map((g) => {
+      const start = g.waypoints[0];
+      const next = g.waypoints[1];
+      return {
+        x: start.x,
+        y: start.y,
+        waypoints: g.waypoints,
+        target: 1,
+        facing: Phaser.Math.Angle.Between(start.x, start.y, next.x, next.y),
+        wait: 0,
+      };
+    });
+
+    // Graphics redrawn every frame (vision cones + guards)
+    this.coneGfx = this.add.graphics();
+    this.guardGfx = this.add.graphics();
+    this.player.setDepth(5);
+    this.guardGfx.setDepth(6);
+
+    // --- Input --------------------------------------------------------------
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.keys = this.input.keyboard.addKeys('W,A,S,D,E,R');
+
+    // --- HUD ----------------------------------------------------------------
+    const hudStyle = { fontFamily: 'monospace', fontSize: '16px', color: '#e6e6e6' };
+    this.hud = this.add.text(30, 26, '', hudStyle).setDepth(10);
+    this.add.text(WIDTH - 30, 26, 'Move: WASD / Arrows   Sabotage: E',
+      { ...hudStyle, fontSize: '13px', color: '#8a93a8' }).setOrigin(1, 0).setDepth(10);
+    this.prompt = this.add.text(0, 0, '[E] Sabotage', {
+      fontFamily: 'monospace', fontSize: '13px', color: '#fff3bf',
+      backgroundColor: '#000000aa', padding: { x: 4, y: 2 },
+    }).setOrigin(0.5).setDepth(10).setVisible(false);
+    this.banner = this.add.text(WIDTH / 2, HEIGHT / 2, '', {
+      fontFamily: 'monospace', fontSize: '36px', color: '#ffffff', align: 'center',
+      backgroundColor: '#000000cc', padding: { x: 24, y: 16 },
+    }).setOrigin(0.5).setDepth(20).setVisible(false);
+
+    this.updateHud();
+  }
+
+  update(time, delta) {
+    const dt = delta / 1000;
+
+    if (this.won) {
+      if (Phaser.Input.Keyboard.JustDown(this.keys.R)) this.scene.restart();
+      this.drawGuards();
+      return;
+    }
+    if (this.gameOver) return;
+
+    this.handlePlayerMovement();
+    this.updateGuards(dt);
+    this.drawGuards();
+    this.handleSabotage();
+    this.checkDetection();
+  }
+
+  // ---------------------------------------------------------------------------
+  handlePlayerMovement() {
+    let vx = 0, vy = 0;
+    if (this.cursors.left.isDown || this.keys.A.isDown) vx -= 1;
+    if (this.cursors.right.isDown || this.keys.D.isDown) vx += 1;
+    if (this.cursors.up.isDown || this.keys.W.isDown) vy -= 1;
+    if (this.cursors.down.isDown || this.keys.S.isDown) vy += 1;
+    const v = new Phaser.Math.Vector2(vx, vy).normalize().scale(PLAYER_SPEED);
+    this.player.body.setVelocity(v.x, v.y);
+  }
+
+  updateGuards(dt) {
+    for (const g of this.guards) {
+      if (g.wait > 0) {
+        g.wait -= dt;
+        // glance around a little while paused
+        g.facing += Math.sin(this.time.now / 300) * 0.02;
+        continue;
+      }
+      const wp = g.waypoints[g.target];
+      const desired = Phaser.Math.Angle.Between(g.x, g.y, wp.x, wp.y);
+      g.facing = Phaser.Math.Angle.RotateTo(g.facing, desired, 3 * dt);
+
+      // Only walk once roughly facing the target
+      if (Math.abs(Phaser.Math.Angle.Wrap(desired - g.facing)) < 0.15) {
+        const dist = Phaser.Math.Distance.Between(g.x, g.y, wp.x, wp.y);
+        const step = GUARD_SPEED * dt;
+        if (dist <= step) {
+          g.x = wp.x;
+          g.y = wp.y;
+          g.target = (g.target + 1) % g.waypoints.length;
+          g.wait = 0.8;
+        } else {
+          g.x += Math.cos(desired) * step;
+          g.y += Math.sin(desired) * step;
+        }
+      }
+    }
+  }
+
+  drawGuards() {
+    const cone = this.coneGfx;
+    const gfx = this.guardGfx;
+    cone.clear();
+    gfx.clear();
+
+    for (const g of this.guards) {
+      // Vision cone via raycasting so walls cut it off
+      const color = this.gameOver ? 0xff3b3b : 0xffe066;
+      cone.fillStyle(color, this.gameOver ? 0.35 : 0.18);
+      cone.beginPath();
+      cone.moveTo(g.x, g.y);
+      for (let i = 0; i <= VISION_RAYS; i++) {
+        const a = g.facing - VISION_HALF_ANGLE + (i / VISION_RAYS) * VISION_HALF_ANGLE * 2;
+        const len = this.castRay(g.x, g.y, a, VISION_RANGE);
+        cone.lineTo(g.x + Math.cos(a) * len, g.y + Math.sin(a) * len);
+      }
+      cone.closePath();
+      cone.fillPath();
+
+      // Guard body + facing marker
+      gfx.fillStyle(0x3b82f6, 1);
+      gfx.fillCircle(g.x, g.y, GUARD_RADIUS);
+      gfx.lineStyle(2, 0xbfdbfe, 1);
+      gfx.strokeCircle(g.x, g.y, GUARD_RADIUS);
+      gfx.fillStyle(0xffffff, 1);
+      gfx.fillCircle(g.x + Math.cos(g.facing) * 8, g.y + Math.sin(g.facing) * 8, 3);
+    }
+  }
+
+  castRay(x, y, angle, maxLen) {
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    for (let d = 0; d < maxLen; d += 4) {
+      const px = x + cos * d, py = y + sin * d;
+      for (const r of this.blockers) {
+        if (r.contains(px, py)) return d;
+      }
+    }
+    return maxLen;
+  }
+
+  hasLineOfSight(x1, y1, x2, y2) {
+    const line = new Phaser.Geom.Line(x1, y1, x2, y2);
+    for (const r of this.blockers) {
+      if (Phaser.Geom.Intersects.LineToRectangle(line, r)) return false;
+    }
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  handleSabotage() {
+    const px = this.player.x, py = this.player.y;
+    let nearest = null;
+    for (const f of this.furnaces) {
+      if (f.sabotaged) continue;
+      if (Phaser.Math.Distance.Between(px, py, f.x, f.y) < SABOTAGE_DISTANCE) {
+        nearest = f;
+        break;
+      }
+    }
+
+    if (nearest) {
+      this.prompt.setPosition(nearest.x, nearest.y - 38).setVisible(true);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.E)) this.sabotage(nearest);
+    } else {
+      this.prompt.setVisible(false);
+    }
+  }
+
+  sabotage(f) {
+    f.sabotaged = true;
+    this.tweens.killTweensOf(f.glow);
+    f.glow.setVisible(false);
+    f.body.setFillStyle(0x343a40);
+    f.body.setStrokeStyle(3, 0x6c757d);
+    this.add.text(f.x, f.y, 'X', { fontFamily: 'monospace', fontSize: '22px', color: '#adb5bd' })
+      .setOrigin(0.5);
+    this.cameras.main.shake(120, 0.004);
+    this.prompt.setVisible(false);
+
+    this.sabotagedCount++;
+    this.updateHud();
+
+    if (this.sabotagedCount === this.furnaces.length) this.winLevel();
+  }
+
+  checkDetection() {
+    const px = this.player.x, py = this.player.y;
+    for (const g of this.guards) {
+      const dist = Phaser.Math.Distance.Between(g.x, g.y, px, py);
+
+      // Bumping into a guard always counts as caught
+      if (dist < GUARD_RADIUS + PLAYER_RADIUS) return this.caught();
+
+      if (dist > VISION_RANGE + PLAYER_RADIUS) continue;
+      const angleTo = Phaser.Math.Angle.Between(g.x, g.y, px, py);
+      const diff = Math.abs(Phaser.Math.Angle.Wrap(angleTo - g.facing));
+      if (diff > VISION_HALF_ANGLE) continue;
+      if (this.hasLineOfSight(g.x, g.y, px, py)) return this.caught();
+    }
+  }
+
+  caught() {
+    this.gameOver = true;
+    this.player.body.setVelocity(0, 0);
+    this.prompt.setVisible(false);
+    this.drawGuards(); // redraw cones in red
+    this.player.setFillStyle(0xff3b3b);
+    this.cameras.main.flash(250, 255, 40, 40);
+    this.banner.setText('SPOTTED!\nRestarting...').setColor('#ff6b6b').setVisible(true);
+    this.time.delayedCall(1300, () => this.scene.restart());
+  }
+
+  winLevel() {
+    this.won = true;
+    this.player.body.setVelocity(0, 0);
+    this.banner
+      .setText('ALL FURNACES SABOTAGED!\nTinker escapes into the night.\n\nPress R to play again')
+      .setFontSize(28)
+      .setColor('#8ce99a')
+      .setVisible(true);
+  }
+
+  updateHud() {
+    this.hud.setText(`Furnaces sabotaged: ${this.sabotagedCount} / ${this.furnaces.length}`);
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.AUTO,
+  parent: 'game',
+  width: WIDTH,
+  height: HEIGHT,
+  physics: { default: 'arcade', arcade: { debug: false } },
+  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  scene: FactoryScene,
+});
+</script>
+</body>
+</html>
