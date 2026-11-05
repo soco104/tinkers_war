@@ -127,6 +127,116 @@ function drawGauge(g, x, y) {
   g.fillStyle(0x222222, 1).fillCircle(x, y, 1);
 }
 
+// Toothed cog: polygon teeth around a disc with a hub hole
+function drawCog(g, x, y, r, teeth, color = C.brass, hole = 0x1a110b) {
+  g.fillStyle(color, 1);
+  const w = Math.PI / teeth * 0.55;
+  for (let i = 0; i < teeth; i++) {
+    const a = (i / teeth) * Math.PI * 2;
+    g.fillPoints([
+      { x: x + Math.cos(a - w) * r * 0.9, y: y + Math.sin(a - w) * r * 0.9 },
+      { x: x + Math.cos(a - w * 0.6) * r * 1.22, y: y + Math.sin(a - w * 0.6) * r * 1.22 },
+      { x: x + Math.cos(a + w * 0.6) * r * 1.22, y: y + Math.sin(a + w * 0.6) * r * 1.22 },
+      { x: x + Math.cos(a + w) * r * 0.9, y: y + Math.sin(a + w) * r * 0.9 },
+    ], true);
+  }
+  g.fillCircle(x, y, r);
+  g.lineStyle(1, 0x000000, 0.25).strokeCircle(x, y, r * 0.68);
+  g.fillStyle(hole, 1).fillCircle(x, y, r * 0.3);
+}
+
+function drawSpring(g, x, y, len, rad, vertical = true, color = 0x9aa3a8) {
+  g.lineStyle(2, color, 1);
+  const coils = Math.max(3, Math.round(len / 5));
+  for (let i = 0; i < coils; i++) {
+    const t = (i / (coils - 1)) * len;
+    if (vertical) g.strokeEllipse(x, y + t, rad * 2, 5);
+    else g.strokeEllipse(x + t, y, 5, rad * 2);
+  }
+}
+
+// Wrench hanging head-up from a nail
+function drawHangingWrench(g, x, y, len, wallColor) {
+  g.fillStyle(0x1a110b, 1).fillCircle(x, y - 2, 1.5);                    // nail
+  g.fillStyle(0x8a939a, 1).fillRect(x - 2, y + 4, 4, len);
+  g.fillCircle(x, y + 4, 6).fillCircle(x, y + len + 2, 4);
+  g.fillStyle(wallColor, 1).fillRect(x - 2, y - 3, 4, 6);                // open jaw
+}
+
+function drawPiston(g, x, y, len, vertical = false) {
+  if (vertical) {
+    g.fillStyle(0xb8c0c4, 1).fillRect(x - 2, y, 4, len * 0.5);
+    g.fillStyle(C.brass, 1).fillRoundedRect(x - 7, y + len * 0.45, 14, len * 0.55, 3);
+    g.fillStyle(C.brassDark, 1).fillRect(x - 7, y + len * 0.45, 14, 3);
+  } else {
+    g.fillStyle(0xb8c0c4, 1).fillRect(x + len * 0.5, y - 2, len * 0.5, 4);
+    g.fillStyle(C.brass, 1).fillRoundedRect(x, y - 7, len * 0.55, 14, 3);
+    g.fillStyle(C.brassDark, 1).fillRect(x + len * 0.55 - 3, y - 7, 3, 14);
+  }
+}
+
+// A heap of mechanical junk: cogs, springs, pipe offcuts, plates, nuts, pistons.
+// Seeded so every pile looks hand-placed but stays the same each time.
+function drawJunkPile(g, cx, baseY, width, height, count, seed) {
+  const rng = new Phaser.Math.RandomDataGenerator([String(seed)]);
+  const metals = [C.brass, C.copper, 0x7a6a4a, C.brassDark, 0x6a6f72, 0x8a939a, 0x5a4a3a];
+
+  // Shadow and dark heap underneath
+  g.fillStyle(0x000000, 0.35).fillEllipse(cx, baseY + 2, width * 1.1, 14);
+  g.fillStyle(0x241a12, 1).fillTriangle(cx - width / 2, baseY, cx + width / 2, baseY, cx, baseY - height * 0.8);
+  g.fillEllipse(cx, baseY - 4, width, height * 0.5);
+
+  // Pick positions inside a triangular mound, draw back (high) to front (low)
+  const items = [];
+  for (let i = 0; i < count; i++) {
+    const up = Math.pow(rng.frac(), 1.4) * height;
+    const half = (width / 2) * (1 - up / height) + 4;
+    items.push({ x: cx + (rng.frac() * 2 - 1) * half, y: baseY - up - 4, kind: rng.between(0, 9), col: rng.pick(metals), s: rng.frac() });
+  }
+  items.sort((a, b) => a.y - b.y);
+
+  for (const it of items) {
+    const { x, y, col, s } = it;
+    switch (it.kind) {
+      case 0: case 1: case 2:                                    // cogs (most common)
+        drawCog(g, x, y, 4 + s * 9, 6 + Math.round(s * 5), col);
+        break;
+      case 3:                                                    // spring
+        drawSpring(g, x - 8, y, 16, 4 + s * 2, false, s > 0.5 ? 0x9aa3a8 : C.copperLight);
+        break;
+      case 4:                                                    // pipe offcut
+        drawPipe(g, x - 10 - s * 8, y, x + 10 + s * 8, y, 5);
+        break;
+      case 5: {                                                  // bent metal plate
+        const a = s * Math.PI, w = 10 + s * 8, h = 6 + s * 4;
+        const pts = [[-w, -h], [w, -h], [w, h], [-w, h]].map(([px, py]) => ({
+          x: x + px * Math.cos(a) - py * Math.sin(a), y: y + px * Math.sin(a) + py * Math.cos(a),
+        }));
+        g.fillStyle(col === C.brass ? 0x6a6f72 : col, 1).fillPoints(pts, true);
+        g.fillStyle(0x1a110b, 1).fillCircle(pts[0].x * 0.8 + x * 0.2, pts[0].y * 0.8 + y * 0.2, 1.2);
+        break;
+      }
+      case 6: {                                                  // hex nut
+        const r = 3 + s * 3;
+        const pts = [];
+        for (let k = 0; k < 6; k++) pts.push({ x: x + Math.cos(k * Math.PI / 3) * r, y: y + Math.sin(k * Math.PI / 3) * r });
+        g.fillStyle(0x8a939a, 1).fillPoints(pts, true);
+        g.fillStyle(0x1a110b, 1).fillCircle(x, y, r * 0.45);
+        break;
+      }
+      case 7:                                                    // piston
+        drawPiston(g, x - 12, y, 24 + s * 10);
+        break;
+      case 8:                                                    // old gauge
+        drawGauge(g, x, y);
+        break;
+      default:                                                   // dented can / canister
+        g.fillStyle(col, 1).fillRoundedRect(x - 5, y - 7, 10 + s * 4, 13, 2);
+        g.fillStyle(0x000000, 0.3).fillRect(x - 5, y - 7, 10 + s * 4, 2);
+    }
+  }
+}
+
 // Cute chibi character: big head, small body. `o` customises colours and extras.
 function drawChibi(g, o) {
   const skin = o.skin ?? 0xf6cfa8;
@@ -213,6 +323,42 @@ const CHARACTERS = {
       g.fillStyle(0xc0532b, 1).fillRect(8, 10, 32, 5).fillCircle(40, 13, 3);    // bandana
     },
   },
+  papa: {
+    hair: 0x5a3a24, outfit: 0x7a5a3a, boots: 0x2a1e14, skin: 0xeec39a,
+    body: (g) => {
+      g.fillStyle(0x4e2f18, 1).fillRoundedRect(15, 36, 18, 15, 3);              // leather apron
+      g.fillStyle(C.brass, 1).fillRect(18, 39, 2, 6).fillRect(28, 39, 2, 5);     // tools in pocket
+    },
+    head: (g) => {
+      g.fillStyle(0x4a3a2a, 1).fillEllipse(24, 9, 32, 12).fillEllipse(28, 13, 30, 5); // flat cap
+      g.fillStyle(0x5a3a24, 1).fillEllipse(24, 33, 20, 9).fillEllipse(24, 30.5, 12, 3); // beard
+      g.lineStyle(2, 0x3a2414, 1).lineBetween(14, 21, 21, 21).lineBetween(27, 21, 34, 21);
+    },
+  },
+  collector: {
+    hair: 0x2b2b2b, outfit: 0x2f4a2a, boots: 0x111111, skin: 0xf3d2b0,
+    body: (g) => {
+      g.fillStyle(0xf2e6c9, 1).fillTriangle(21, 33, 27, 33, 24, 39);             // cravat
+      g.lineStyle(1.5, C.brass, 1).lineBetween(16, 41, 24, 44).lineBetween(24, 44, 32, 41);
+      g.fillStyle(C.brass, 1).fillCircle(24, 44, 1.6);
+    },
+    head: (g) => {
+      const skin = 0xf3d2b0;
+      g.fillStyle(skin, 1).fillRect(15, 21.5, 6, 3.5).fillRect(27, 21.5, 6, 3.5); // smug half-lidded eyes
+      g.lineStyle(1.5, 0x2b1d14, 1).lineBetween(15, 25, 21, 25).lineBetween(27, 25, 33, 25);
+      g.fillStyle(skin, 1).fillRect(21, 30, 6, 3);
+      g.lineStyle(1.5, 0x7a3b2e, 1).lineBetween(21, 31.5, 28, 30);                // smirk
+      g.lineStyle(1.5, 0x2b2b2b, 1).lineBetween(19, 29.5, 23, 29).lineBetween(25, 29, 29, 29.5);
+      g.fillStyle(0x1a1a1a, 1).fillEllipse(24, 7, 24, 14).fillEllipse(24, 12, 36, 5); // bowler hat
+      g.fillStyle(0x5a2a2a, 1).fillRect(12, 9, 24, 2);
+    },
+  },
+  tinker_kid: {
+    hair: 0x8b4a2b, outfit: 0xe8c0cc, boots: 0xd8a8b4, pigtails: true,
+    head: (g) => {
+      g.fillStyle(0xd94a6a, 1).fillTriangle(36, 8, 44, 4, 44, 12).fillTriangle(36, 8, 30, 3, 30, 12);
+    },
+  },
   ren: {
     hair: 0x8b4a2b, outfit: 0x5b3f72, boots: 0x2a1e2a, longHair: true,
     body: (g) => {
@@ -290,6 +436,18 @@ class BootScene extends Phaser.Scene {
     make('heart', 22, 20, heart(0xe8553d));
     make('heart_empty', 22, 20, heart(0x3b2f27));
 
+    // Prologue props
+    make('cog', 40, 40, (g) => drawCog(g, 20, 20, 15, 10, 0xffffff, 0x1a110b));
+    make('knife', 20, 6, (g) => {
+      g.fillStyle(0x5e3719, 1).fillRoundedRect(0, 1, 7, 4, 1);
+      g.fillStyle(0xd0d6da, 1).fillRect(7, 1.5, 9, 3).fillTriangle(16, 1.5, 20, 3, 16, 4.5);
+    });
+    make('cup', 14, 12, (g) => {
+      g.fillStyle(0xe8dcc0, 1).fillRoundedRect(1, 3, 8, 8, 2);
+      g.lineStyle(1.5, 0xe8dcc0, 1).strokeCircle(10.5, 7, 2.2);
+      g.fillStyle(0x7a4a24, 1).fillRect(2, 4, 6, 2);
+    });
+
     // Soft radial textures (glow, steam, vignette) via canvas gradients
     const radial = (key, w, h, stops, inner = 0) => {
       const tex = this.textures.createCanvas(key, w, h);
@@ -304,7 +462,526 @@ class BootScene extends Phaser.Scene {
     radial('puff', 64, 64, [[0, 'rgba(255,255,255,0.8)'], [1, 'rgba(255,255,255,0)']]);
     radial('vignette', WIDTH, HEIGHT, [[0, 'rgba(0,0,0,0)'], [0.5, 'rgba(0,0,0,0)'], [1, 'rgba(8,4,2,0.7)']], 0);
 
-    this.scene.start('Story');
+    this.scene.start('Prologue');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared dialogue box with typewriter text
+// ---------------------------------------------------------------------------
+
+// UI layers sit far above the scenery, whose depth follows y-position.
+const DEPTH_BLACKOUT = 5000;
+const DEPTH_UI = 6000;
+
+class DialogueBox {
+  constructor(scene) {
+    this.scene = scene;
+    this.typing = false;
+    const boxY = 470;
+    const frame = scene.add.rectangle(WIDTH / 2, boxY + 70, WIDTH - 60, 140, 0x140e0a, 0.94)
+      .setStrokeStyle(3, 0xb5893a).setDepth(DEPTH_UI);
+    const inner = scene.add.rectangle(WIDTH / 2, boxY + 70, WIDTH - 72, 128)
+      .setStrokeStyle(1, 0x6e5020).setDepth(DEPTH_UI);
+    this.name = scene.add.text(50, boxY + 12, '', {
+      fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: '#ffffff',
+    }).setDepth(DEPTH_UI + 1);
+    this.body = scene.add.text(50, boxY + 42, '', {
+      fontFamily: 'monospace', fontSize: '18px', color: '#f0e2c8',
+      wordWrap: { width: WIDTH - 110 }, lineSpacing: 6,
+    }).setDepth(DEPTH_UI + 1);
+    this.hint = scene.add.text(WIDTH - 46, boxY + 120, 'SPACE ▶', {
+      fontFamily: 'monospace', fontSize: '13px', color: '#c9a227',
+    }).setOrigin(1, 0.5).setDepth(DEPTH_UI + 1);
+    scene.tweens.add({ targets: this.hint, alpha: 0.3, duration: 500, yoyo: true, repeat: -1 });
+    this.parts = [frame, inner, this.name, this.body, this.hint];
+  }
+
+  setVisible(v) { this.parts.forEach((p) => p.setVisible(v)); return this; }
+  setHintVisible(v) { this.hint.setVisible(v); return this; }
+
+  show(speaker, text) {
+    if (speaker) {
+      this.name.setText(speaker).setColor(SPEAKER_COLORS[speaker] || '#ffffff');
+      this.body.setFontStyle('normal').setColor('#f0e2c8');
+    } else {
+      this.name.setText('');
+      this.body.setFontStyle('italic').setColor('#c2b293');
+    }
+    this.fullText = text;
+    this.body.setText('');
+    this.typing = true;
+    let i = 0;
+    this.typeEvent = this.scene.time.addEvent({
+      delay: 22,
+      repeat: text.length - 1,
+      callback: () => {
+        i++;
+        this.body.setText(text.slice(0, i));
+        if (i >= text.length) this.typing = false;
+      },
+    });
+  }
+
+  // Completes the current line if it is still typing. Returns true if it was.
+  finish() {
+    if (!this.typing) return false;
+    this.typeEvent.remove();
+    this.body.setText(this.fullText);
+    this.typing = false;
+    return true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Prologue: the night Tinker's father was taken
+// ---------------------------------------------------------------------------
+
+class PrologueScene extends Phaser.Scene {
+  constructor() { super('Prologue'); }
+
+  create() {
+    this.leaving = false;
+    this.stepIndex = -1;
+    this.busy = false;
+
+    this.drawHome();
+
+    const actor = (key, x, y, scale = 2) =>
+      this.add.image(x, y, key).setOrigin(0.5, FEET_Y / CHAR_H).setScale(scale);
+    this.papa = actor('papa', 170, 420);
+    this.ren = actor('ren', 350, 410);
+    this.kid = actor('tinker_kid', 255, 448, 1.3);
+    this.voss = actor('collector', 1020, 390);
+    this.guardA = actor('guard', 1020, 400);
+    this.guardB = actor('guard', 1060, 420);
+    this.actors = [this.papa, this.ren, this.kid, this.voss, this.guardA, this.guardB];
+    this.knife = this.add.image(545, 378, 'knife').setDepth(401);
+    this.cup = this.add.image(424, 281, 'cup').setDepth(331).setScale(1.4);
+
+    this.blackout = this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x000000).setDepth(DEPTH_BLACKOUT);
+    this.centerText = this.add.text(WIDTH / 2, HEIGHT / 2 - 30, '', {
+      fontFamily: 'monospace', fontSize: '30px', color: '#e2bd55', align: 'center',
+    }).setOrigin(0.5).setDepth(DEPTH_UI).setAlpha(0);
+    this.box = new DialogueBox(this).setVisible(false);
+    this.add.text(WIDTH - 30, 44, 'ESC: skip prologue', {
+      fontFamily: 'monospace', fontSize: '12px', color: '#a8916a',
+      backgroundColor: '#140e0acc', padding: { x: 5, y: 3 },
+    }).setOrigin(1, 0).setDepth(DEPTH_UI + 1);
+
+    this.steps = this.buildSteps();
+    this.input.keyboard.on('keydown-SPACE', () => this.advance());
+    this.input.keyboard.on('keydown-ESC', () => this.toStory());
+    this.next();
+  }
+
+  update() {
+    for (const a of this.actors) a.setDepth(a.y);
+  }
+
+  // --- Step runner -----------------------------------------------------------
+  // Each step: { speaker, text } for dialogue, { center } for a title card,
+  // run() for animation lasting `ms`, and auto: true to continue without Space.
+
+  advance() {
+    if (this.leaving || this.busy) return;
+    if (this.box.finish()) return;
+    this.next();
+  }
+
+  next() {
+    this.stepIndex++;
+    if (this.stepIndex >= this.steps.length) return this.toStory();
+    const s = this.steps[this.stepIndex];
+
+    if (s.center) {
+      this.box.setVisible(false);
+      this.centerText.setText(s.center).setAlpha(0);
+      this.tweens.add({ targets: this.centerText, alpha: 1, duration: 900 });
+    } else {
+      this.centerText.setAlpha(0);
+      if (s.text) {
+        this.box.setVisible(true);
+        this.box.show(s.speaker, s.text);
+      } else {
+        this.box.setVisible(false);
+      }
+    }
+
+    if (s.run) s.run();
+    const ms = Math.max(s.ms || 0, s.center ? 900 : 0);
+    this.busy = true;
+    this.box.setHintVisible(false);
+    this.time.delayedCall(ms, () => {
+      this.busy = false;
+      this.box.setHintVisible(true);
+      if (s.auto) this.next();
+    });
+  }
+
+  toStory() {
+    if (this.leaving) return;
+    this.leaving = true;
+    this.cameras.main.fadeOut(600, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Story'));
+  }
+
+  // --- Animation helpers -----------------------------------------------------
+
+  walk(a, x, y, ms, delay = 0) {
+    this.time.delayedCall(delay, () => {
+      if (x !== a.x) a.setFlipX(x < a.x);
+      this.tweens.add({ targets: a, x, y, duration: ms });
+      this.tweens.add({
+        targets: a, angle: { from: -5, to: 5 }, duration: 130, yoyo: true,
+        repeat: Math.max(0, Math.floor(ms / 260) - 1), onComplete: () => a.setAngle(0),
+      });
+    });
+  }
+
+  hop(a, times = 2) {
+    this.tweens.add({ targets: a, y: a.y - 12, duration: 120, yoyo: true, repeat: times - 1, ease: 'Quad.easeOut' });
+  }
+
+  shake(a, dist, times, ms = 50) {
+    this.tweens.add({ targets: a, x: a.x + dist, duration: ms, yoyo: true, repeat: times - 1 });
+  }
+
+  fadeFromBlack(ms) { this.tweens.add({ targets: this.blackout, alpha: 0, duration: ms }); }
+  fadeToBlack(ms) { this.tweens.add({ targets: this.blackout, alpha: 1, duration: ms }); }
+
+  // --- The script ------------------------------------------------------------
+
+  buildSteps() {
+    return [
+      { run: () => this.fadeFromBlack(1200), ms: 1200,
+        text: "The Lower Wards, long ago. A tinker's home, crammed with gears, springs and three people." },
+      { run: () => this.hop(this.kid), ms: 300,
+        speaker: 'Papa', text: 'Almost there, Tink. One more gear and your music box will sing again.' },
+      { run: () => this.hop(this.kid, 3), ms: 400,
+        speaker: 'Tinker', text: 'Sing, music box! Sing!' },
+      { speaker: 'Ren', text: "Papa, she should be in bed. And supper's nearly ready." },
+      { run: () => { this.shake(this.door, 3, 6); this.cameras.main.shake(500, 0.004); }, ms: 600,
+        text: 'KNOCK. KNOCK. KNOCK.' },
+      { run: () => {
+          this.door.setFillStyle(0x07080e);
+          this.doorKnob.setVisible(false);
+          this.walk(this.voss, 760, 390, 1100);
+          this.walk(this.guardA, 850, 400, 1000, 250);
+          this.walk(this.guardB, 905, 422, 1000, 450);
+        }, ms: 1450,
+        speaker: 'Collector Voss', text: "Good evening! Collector Voss, Ministry of Heat. It's tax night, I'm afraid." },
+      { run: () => { this.walk(this.guardA, 1020, 400, 700); this.walk(this.guardB, 1060, 422, 700); }, ms: 700,
+        speaker: 'Collector Voss', text: 'Wait outside, boys. This is a friendly visit.' },
+      { run: () => this.walk(this.voss, 480, 390, 1300), ms: 1300,
+        speaker: 'Collector Voss', text: 'Coal tax. Chimney tax. Gear tax. And a little something for my trouble.' },
+      { speaker: 'Papa', text: 'We paid last month. We barely have enough for—' },
+      { speaker: 'Collector Voss', text: 'Then fetch what you barely have.' },
+      { run: () => this.walk(this.papa, -60, 420, 1500), ms: 1500,
+        speaker: 'Papa', text: "...Ren, get the collector some tea. I'll find the money." },
+      // Ren makes the tea in the kitchen corner
+      { run: () => {
+          this.ren.setFlipX(false);
+          this.walk(this.ren, 415, 405, 600);
+          this.time.delayedCall(700, () => {
+            this.kettleSteam.explode(14);
+            this.tweens.add({ targets: this.kettle, x: 370, duration: 40, yoyo: true, repeat: 7 });
+          });
+          this.time.delayedCall(1300, () => {
+            this.cup.setDepth(1000);
+            this.tweens.add({ targets: this.cup, x: 434, y: 392, duration: 300 });
+          });
+        }, ms: 1700,
+        text: 'The kettle whistles. Ren pours the tea with shaking hands.' },
+      { run: () => {
+          this.walk(this.ren, 575, 410, 1200);
+          this.tweens.add({ targets: this.cup, x: 520, y: 374, duration: 1200 });
+          this.time.delayedCall(1200, () => this.cup.setDepth(402));
+        }, ms: 1200,
+        speaker: 'Ren', text: '...Your tea, sir.' },
+      { run: () => {
+          this.tweens.add({ targets: this.voss, x: 505, duration: 200 });
+          this.tweens.add({ targets: this.ren, x: 555, duration: 200 });
+          this.ren.setFlipX(true);
+        }, ms: 300,
+        speaker: 'Collector Voss', text: 'My, my. What a pretty girl. Perhaps she could work off what your father owes.' },
+      { run: () => { this.shake(this.ren, 12, 6, 60); this.cameras.main.shake(400, 0.006); }, ms: 700,
+        speaker: 'Ren', text: 'Let go of me!' },
+      // The struggle, then a hard cut to black
+      { run: () => {
+          this.shake(this.ren, 14, 4, 60);
+          this.shake(this.voss, -10, 4, 60);
+          this.cameras.main.shake(450, 0.01);
+          this.time.delayedCall(500, () => this.blackout.setAlpha(1));
+        }, ms: 900, auto: true },
+      { run: () => {
+          // Rearrange the room while the screen is black
+          this.voss.setVisible(false);
+          this.ren.setPosition(600, 425).setFlipX(true);
+          this.tweens.add({ targets: this.ren, x: 602, duration: 60, yoyo: true, repeat: -1 }); // trembling
+          this.knife.setPosition(586, 410).setDepth(1000);
+          this.kid.setPosition(110, 452);
+        }, ms: 600,
+        text: 'A scuffle. A knife from the kitchen table. Then, silence.' },
+      { run: () => this.fadeFromBlack(1000), ms: 1000,
+        text: 'Collector Voss did not get up.' },
+      { run: () => { this.papa.setFlipX(false); this.walk(this.papa, 540, 420, 800); }, ms: 800,
+        speaker: 'Papa', text: 'Ren! Oh, Ren...' },
+      { speaker: 'Ren', text: "Papa, he grabbed me, I didn't mean to, I—" },
+      { run: () => this.tweens.add({ targets: this.knife, x: 556, y: 410, duration: 400 }), ms: 400,
+        speaker: 'Papa', text: 'Give me the knife. Listen to me. You were never holding it.' },
+      { run: () => { this.walk(this.guardA, 760, 400, 700); this.walk(this.guardB, 820, 430, 700, 100); }, ms: 800,
+        speaker: 'Guard', text: "What's going on in here?!" },
+      { speaker: 'Papa', text: 'It was me. I did it.' },
+      { speaker: 'Ren', text: 'Papa, no—' },
+      { speaker: 'Papa', text: 'Look after your sister, Ren. Promise me.' },
+      { run: () => {
+          this.walk(this.guardA, 585, 405, 600);
+          this.walk(this.guardB, 600, 432, 600);
+          this.time.delayedCall(600, () => this.knife.setVisible(false));
+          this.walk(this.papa, 1060, 420, 2400, 800);
+          this.walk(this.guardA, 1100, 405, 2400, 800);
+          this.walk(this.guardB, 1110, 435, 2400, 800);
+          this.walk(this.kid, 640, 450, 1200, 900);
+        }, ms: 3200,
+        speaker: 'Tinker', text: 'Papa! PAPA!' },
+      { run: () => this.fadeToBlack(1500), ms: 1500, center: 'We never saw him again.' },
+      { center: '11 years later' },
+    ];
+  }
+
+  // --- Backdrop: a cramped tinker's home at night ----------------------------
+
+  drawHome() {
+    const WALL = 0x2a1c14;
+    const g = this.add.graphics().setDepth(0);
+    // Back wall: mismatched planks, some patched over
+    g.fillStyle(WALL, 1).fillRect(0, 0, WIDTH, 330);
+    g.lineStyle(2, 0x1f140e, 1);
+    for (let x = 0; x < WIDTH; x += 48) g.lineBetween(x, 0, x, 330);
+    for (const [x, y, w, h, c] of [[720, 205, 42, 26, 0x3a2a1c], [278, 236, 22, 44, 0x35251a],
+      [900, 56, 40, 30, 0x3a2a1c], [52, 60, 34, 22, 0x332318]]) {
+      g.fillStyle(c, 1).fillRect(x, y, w, h);
+      g.fillStyle(0x0e0905, 1).fillCircle(x + 3, y + 3, 1.2).fillCircle(x + w - 3, y + 3, 1.2)
+        .fillCircle(x + 3, y + h - 3, 1.2).fillCircle(x + w - 3, y + h - 3, 1.2);
+    }
+    // Bare plank floor with a threadbare, patched rug
+    g.fillStyle(0x3b2a1e, 1).fillRect(0, 330, WIDTH, HEIGHT - 330);
+    g.lineStyle(2, 0x2c1f16, 1);
+    for (let y = 352; y < HEIGHT; y += 22) g.lineBetween(0, y, WIDTH, y);
+    g.fillStyle(0x1a110b, 1).fillRect(0, 326, WIDTH, 6);
+    g.fillStyle(0x5a2a26, 1).fillEllipse(500, 432, 300, 70);
+    g.lineStyle(2, 0x3e1d1a, 1).strokeEllipse(500, 432, 270, 56);
+    g.fillStyle(0x6b5a3a, 1).fillRect(420, 425, 22, 14);
+    g.fillStyle(0x3e4a5a, 1).fillRect(560, 438, 18, 12);
+
+    // Pipes along the walls: across the ceiling, down the corner, and a leaky one
+    drawPipe(g, 0, 26, WIDTH, 26, 10);
+    drawPipe(g, 935, 26, 935, 330, 10);
+    g.fillStyle(0x8a2a1a, 1).fillCircle(935, 190, 11);                   // valve wheel
+    g.fillStyle(WALL, 1).fillCircle(935, 190, 6);
+    g.lineStyle(2, 0x8a2a1a, 1).lineBetween(924, 190, 946, 190).lineBetween(935, 179, 935, 201);
+    drawPipe(g, 600, 268, 790, 268, 7);
+    drawPipe(g, 600, 268, 600, 330, 7);
+    g.fillStyle(0x9aa3a8, 1).fillRect(696, 262, 9, 12);                  // leaky joint (rag-wrapped)
+    g.fillStyle(0x8a7a5e, 1).fillRect(694, 264, 13, 6);
+    g.fillStyle(0x6a6f72, 1).fillRect(690, 336, 20, 16);                  // tin can catching drips
+    g.fillStyle(0x4a4f52, 1).fillRect(690, 336, 20, 3);
+    const drip = this.add.circle(700, 276, 2, 0x8fb8c8).setDepth(1);
+    this.tweens.add({ targets: drip, y: 336, duration: 600, ease: 'Quad.easeIn', repeat: -1, repeatDelay: 900 });
+
+    // Window (one cracked pane) with the moon
+    g.fillStyle(0x5e3f22, 1).fillRect(140, 80, 120, 110);
+    g.fillStyle(0x0f1a2e, 1).fillRect(148, 88, 104, 94);
+    g.fillStyle(0xf3e6c4, 1).fillCircle(225, 115, 14);
+    g.fillStyle(0x5e3f22, 1).fillRect(197, 88, 6, 94).fillRect(148, 132, 104, 6);
+    g.lineStyle(1, 0x8fa8c0, 0.7).lineBetween(150, 92, 172, 112).lineBetween(172, 112, 168, 128).lineBetween(172, 112, 192, 118);
+    g.fillStyle(0x6b5a3a, 1).fillRect(156, 140, 30, 18);                  // board over a broken pane
+
+    // Left wall: a big gear on a nail, a coiled spring, a hanging piston
+    g.lineStyle(1, 0x8a7a5e, 1).lineBetween(40, 40, 30, 72).lineBetween(40, 40, 50, 72);
+    g.fillStyle(0x1a110b, 1).fillCircle(40, 40, 2);
+    drawCog(g, 40, 98, 24, 12, 0x7a6a4a);
+    drawSpring(g, 100, 100, 50, 7);
+    drawPiston(g, 118, 50, 36, true);
+
+    // Pegboard above the workbench with tools
+    g.fillStyle(0x4a3624, 1).fillRect(20, 205, 230, 100);
+    g.fillStyle(0x3a2a1c, 1);
+    for (let x = 30; x < 250; x += 14) for (let y = 215; y < 300; y += 14) g.fillCircle(x, y, 1.3);
+    drawHangingWrench(g, 40, 220, 46, 0x4a3624);
+    drawHangingWrench(g, 60, 220, 36, 0x4a3624);
+    drawHangingWrench(g, 78, 220, 28, 0x4a3624);
+    g.fillStyle(0x5e3719, 1).fillRect(104, 222, 5, 48);                    // hammer
+    g.fillStyle(0x6a6f72, 1).fillRect(94, 216, 26, 10);
+    drawSpring(g, 140, 222, 30, 6, true, C.copperLight);
+    drawCog(g, 180, 240, 14, 9, C.copper);
+    drawCog(g, 222, 232, 10, 8, C.brass);
+    drawCog(g, 214, 272, 12, 8, 0x7a6a4a);
+    g.lineStyle(3, C.copper, 1).strokeCircle(160, 284, 10);                // coil of pipe
+
+    // Upper shelf: a pile of cogs, a spring, an empty coin jar
+    g.fillStyle(0x5e3f22, 1).fillRect(290, 100, 175, 8);
+    g.fillStyle(0x45301a, 1).fillRect(296, 108, 6, 10).fillRect(452, 108, 6, 10);
+    drawCog(g, 312, 86, 12, 9, C.brass);
+    drawCog(g, 334, 90, 9, 8, C.copper);
+    drawCog(g, 322, 72, 8, 7, 0x7a6a4a);
+    drawCog(g, 350, 80, 11, 9, C.brassDark);
+    drawSpring(g, 375, 85, 30, 6, false);
+    g.lineStyle(2, 0xa8c0c8, 0.7).strokeRoundedRect(420, 68, 26, 32, 4);  // coin jar...
+    g.fillStyle(C.brass, 1).fillCircle(433, 96, 3);                        // ...with one coin
+    // Lower shelf: jars, cogs, a piston
+    g.fillStyle(0x5e3f22, 1).fillRect(300, 150, 160, 8);
+    g.fillStyle(0x6a8a7a, 1).fillRoundedRect(306, 124, 16, 26, 3);
+    g.fillStyle(0x8a5a3a, 1).fillRoundedRect(326, 130, 14, 20, 3);
+    drawCog(g, 362, 137, 11, 9, C.brass);
+    g.fillStyle(0x2f5a4a, 1).fillRect(382, 128, 14, 22);                  // tea tins
+    g.fillStyle(C.brass, 1).fillRect(382, 135, 14, 5);
+    g.fillStyle(0x7a2e22, 1).fillRect(400, 132, 12, 18);
+    g.fillStyle(0xe8dcc0, 1).fillEllipse(436, 146, 30, 8).fillEllipse(436, 140, 26, 7).fillEllipse(436, 134, 22, 6); // stacked bowls
+
+    // Gears hanging on strings over the back wall, plus a little turning gear train
+    for (const [x, len, r, col] of [[630, 40, 14, C.brass], [668, 70, 10, C.copper], [700, 30, 18, 0x7a6a4a],
+      [745, 58, 12, C.brass], [775, 36, 8, C.copper]]) {
+      g.lineStyle(1, 0x8a7a5e, 1).lineBetween(x, 40, x, 40 + len - r);
+      g.fillStyle(0x1a110b, 1).fillCircle(x, 40, 1.5);
+      drawCog(g, x, 40 + len, r, Math.round(r * 0.7), col);
+    }
+    g.fillStyle(0x4a3624, 1).fillRoundedRect(450, 172, 110, 70, 6);        // wall-mounted gear train
+    g.lineStyle(2, C.brassDark, 1).strokeRoundedRect(450, 172, 110, 70, 6);
+    const spin = (x, y, scale, tint, dir) => {
+      const cog = this.add.image(x, y, 'cog').setScale(scale).setTint(tint).setDepth(1);
+      this.tweens.add({ targets: cog, angle: dir * 360, duration: 6000 * scale, repeat: -1 });
+    };
+    spin(482, 205, 1.1, C.brass, 1);
+    spin(517, 196, 0.65, C.copper, -1);
+    spin(535, 222, 0.55, C.brassLight, 1);
+
+    // Shelf over the door: pipe offcuts, a dented kettle
+    g.fillStyle(0x5e3f22, 1).fillRect(785, 150, 110, 7);
+    drawPipe(g, 792, 143, 832, 143, 6);
+    g.fillStyle(0x6a6f72, 1).fillEllipse(862, 140, 26, 18).fillRect(870, 133, 14, 4);
+    // Piles of mechanical junk along the walls and in the corners
+    drawCog(g, 905, 298, 26, 14, 0x5a4a3a);                               // big rusty gear leaning on the wall
+    drawJunkPile(g, 915, 352, 110, 75, 26, 'corner');
+    drawJunkPile(g, 24, 348, 80, 50, 16, 'left');
+    drawJunkPile(g, 648, 342, 78, 44, 15, 'leak');
+    drawJunkPile(g, 765, 336, 46, 26, 8, 'door');
+    drawJunkPile(g, 232, 422, 40, 22, 7, 'bench');                       // spilling out from under the bench
+
+    // Stove with a fire
+    this.add.image(345, 300, 'glow').setTint(C.fire).setBlendMode('ADD').setScale(1.6).setAlpha(0.45).setDepth(1);
+    g.fillStyle(C.brassDark, 1).fillRect(338, 200, 14, 60);
+    g.fillStyle(0xb5893a, 1).fillRoundedRect(305, 255, 80, 75, 5);
+    g.fillStyle(0x1a0e08, 1).fillRect(322, 285, 46, 30);
+    g.fillStyle(0xff8c1a, 1).fillRect(326, 300, 38, 13);
+    g.fillStyle(0xffd27a, 1).fillRect(334, 306, 20, 7);
+
+    // --- Kitchen corner ---
+    // Pot rail with a pan, ladle, copper pot and spoon
+    g.lineStyle(3, 0x6a6f72, 1).lineBetween(286, 186, 448, 186);
+    g.lineStyle(1.5, 0x6a6f72, 1).lineBetween(300, 186, 300, 196).lineBetween(322, 186, 322, 200)
+      .lineBetween(412, 186, 412, 194).lineBetween(440, 186, 440, 196);
+    g.fillStyle(0x3a3a3a, 1).fillRect(298, 196, 4, 12).fillCircle(300, 218, 11);   // frying pan
+    g.fillStyle(0x2a2a2a, 1).fillCircle(300, 218, 7);
+    g.fillStyle(0x8a939a, 1).fillRect(321, 200, 3, 22).fillEllipse(322, 224, 10, 7); // ladle
+    g.fillStyle(C.copper, 1).fillRoundedRect(399, 196, 26, 20, 4);                  // copper pot
+    g.fillStyle(C.copperLight, 1).fillRect(397, 196, 30, 3);
+    g.fillStyle(0x8a939a, 1).fillRect(439, 196, 2, 18).fillEllipse(440, 216, 5, 7); // spoon
+    // Small pot on the back burner
+    g.fillStyle(0x3a3a3a, 1).fillRoundedRect(310, 241, 24, 15, 3);
+    g.fillStyle(0x4a4a4a, 1).fillRect(308, 240, 28, 3);
+    // Crockery shelf above the counter
+    g.fillStyle(0x5e3f22, 1).fillRect(386, 240, 62, 6);
+    g.fillStyle(0xe8dcc0, 1).fillCircle(398, 230, 9).fillCircle(414, 230, 9);       // plates on edge
+    g.fillStyle(0xc9b896, 1).fillCircle(398, 230, 5).fillCircle(414, 230, 5);
+    g.fillStyle(0xe8dcc0, 1).fillRoundedRect(428, 228, 9, 12, 2).fillRoundedRect(439, 230, 8, 10, 2); // mugs
+    // Counter with cupboard doors, a tin washbasin and a tea tin
+    g.fillStyle(0x5e3f22, 1).fillRect(388, 290, 68, 40);
+    g.lineStyle(1.5, 0x3a2614, 1).strokeRect(392, 297, 28, 29).strokeRect(424, 297, 28, 29);
+    g.fillStyle(C.brass, 1).fillCircle(416, 311, 1.8).fillCircle(428, 311, 1.8);
+    g.fillStyle(0x7a5532, 1).fillRect(385, 285, 74, 6);
+    g.fillStyle(0x8a939a, 1).fillEllipse(404, 282, 28, 9);
+    g.fillStyle(0x5a6f80, 1).fillEllipse(404, 281, 20, 5);
+    g.fillStyle(0x2f5a4a, 1).fillRect(441, 270, 12, 16);
+    g.fillStyle(C.brass, 1).fillRect(441, 275, 12, 4);
+    // Water bucket by the stove
+    g.fillStyle(0x6a6f72, 1).fillRect(284, 312, 18, 18);
+    g.lineStyle(1.5, 0x4a4f52, 1).strokeEllipse(293, 309, 20, 8);
+
+    // Kettle on the stove (its own object so it can rattle when it whistles)
+    this.kettle = this.add.graphics({ x: 368, y: 248 }).setDepth(2);
+    this.kettle.lineStyle(2.5, 0x3a2a1c, 1).strokeEllipse(0, -9, 18, 12);
+    this.kettle.fillStyle(0x8a939a, 1).fillTriangle(9, -3, 20, -12, 12, 3);
+    this.kettle.fillStyle(0x9aa3a8, 1).fillEllipse(0, 0, 24, 18);
+    this.kettle.fillStyle(0xc8d0d4, 1).fillEllipse(-4, -3, 8, 5);
+    this.kettle.fillStyle(0x6a6f72, 1).fillEllipse(0, -8, 10, 4).fillCircle(0, -11, 2);
+    this.kettleSteam = this.add.particles(388, 236, 'puff', {
+      lifespan: 1400, speedX: { min: 4, max: 14 }, speedY: { min: -30, max: -15 },
+      scale: { start: 0.1, end: 0.6 }, alpha: { start: 0.35, end: 0 }, tint: 0xe8dcc0, frequency: 260,
+    }).setDepth(3);
+
+    // Papa's workbench, covered in half-built gadgets
+    g.fillStyle(0x5e3f22, 1).fillRect(40, 330, 210, 18);
+    g.fillStyle(0x45301a, 1).fillRect(50, 348, 12, 70).fillRect(228, 348, 12, 70);
+    g.fillStyle(0x6a6f72, 1).fillRect(42, 314, 18, 16).fillRect(38, 312, 26, 5);   // vise
+    // Clockwork bird: brass body, exposed cog, one finished wing
+    g.fillStyle(C.brass, 1).fillEllipse(82, 318, 24, 15).fillCircle(93, 311, 6);
+    g.fillStyle(0xd08a2a, 1).fillTriangle(98, 310, 105, 312, 98, 314);
+    g.fillStyle(0x1a110b, 1).fillCircle(94, 310, 1.2);
+    drawCog(g, 80, 319, 4, 6, C.copper);
+    g.lineStyle(1, 0x9aa3a8, 1).lineBetween(76, 312, 66, 302).lineBetween(66, 302, 82, 306);
+    // Music box with its lid open
+    g.fillStyle(0x7a4a24, 1).fillRoundedRect(110, 312, 44, 20, 4);
+    g.fillStyle(0x5e3719, 1).fillRect(112, 296, 40, 5);
+    drawCog(g, 124, 312, 6, 7, C.brass);
+    drawCog(g, 140, 310, 4, 6, C.brassLight);
+    // Robot head with a panel off and wires hanging out
+    g.fillStyle(0x6a6f72, 1).fillRoundedRect(170, 306, 24, 24, 4);
+    g.fillStyle(0x7fd0dc, 1).fillCircle(178, 316, 4);
+    g.fillStyle(0x2a2a2a, 1).fillRect(185, 312, 6, 10);
+    g.lineStyle(1.5, 0xc0392b, 1).lineBetween(188, 322, 196, 332);
+    g.lineStyle(1.5, 0xf2c94c, 1).lineBetween(186, 322, 192, 333);
+    g.lineStyle(1.5, 0x9aa3a8, 1).lineBetween(182, 306, 182, 298);
+    g.fillStyle(0xc0392b, 1).fillCircle(182, 297, 2);
+    // Loose screws and a spare spring
+    g.fillStyle(0x9aa3a8, 1).fillCircle(160, 328, 1.3).fillCircle(165, 326, 1.3).fillCircle(203, 328, 1.3);
+    drawSpring(g, 204, 322, 16, 4, false);
+    // Under the bench: a battered toolbox, a piston, a crate of scrap
+    g.fillStyle(0x7a2e22, 1).fillRect(74, 396, 56, 22);
+    g.fillStyle(0x5a1f18, 1).fillRect(74, 396, 56, 4);
+    g.lineStyle(2, 0x6a6f72, 1).strokeRect(94, 389, 16, 8);
+    drawPiston(g, 140, 410, 50);
+    g.fillStyle(0x4a3624, 1).fillRect(196, 392, 30, 26);
+    drawCog(g, 204, 390, 7, 7, C.copper);
+    drawCog(g, 218, 388, 5, 6, C.brass);
+
+    // Small oil lamp on the bench
+    this.benchLamp = this.add.image(238, 312, 'glow').setTint(0xffc070).setBlendMode('ADD')
+      .setScale(1.3).setAlpha(0.5).setDepth(1);
+    this.tweens.add({ targets: this.benchLamp, alpha: 0.35, scale: 1.2, duration: 180, yoyo: true, repeat: -1 });
+    g.fillStyle(C.brass, 1).fillRect(230, 324, 16, 6).fillEllipse(238, 324, 16, 6);
+    g.fillStyle(0xffe0a0, 0.9).fillEllipse(238, 314, 10, 14);
+    g.fillStyle(0xff9a3c, 1).fillEllipse(238, 316, 4, 7);
+
+    // Door (the panel is its own object so it can rattle and open)
+    g.fillStyle(0x3a2614, 1).fillRect(795, 165, 90, 170);
+    this.door = this.add.rectangle(840, 252, 72, 158, 0x6b4a2b).setStrokeStyle(2, 0x45301a).setDepth(1);
+    this.doorKnob = this.add.circle(864, 255, 4, C.brass).setDepth(2);
+
+    // Hanging lamp
+    g.lineStyle(2, 0x1a110b, 1).lineBetween(560, 0, 560, 60);
+    g.fillStyle(C.brass, 1).fillRect(550, 60, 20, 22);
+    g.fillStyle(0xffc45a, 1).fillRect(554, 64, 12, 14);
+    this.add.image(560, 120, 'glow').setTint(0xffc070).setBlendMode('ADD').setScale(4).setAlpha(0.3).setDepth(1);
+
+    // Kitchen table (drawn in front of anyone sitting behind it) and a chair
+    const chair = this.add.graphics().setDepth(320);
+    chair.fillStyle(0x45301a, 1).fillRect(462, 300, 36, 80);
+    const table = this.add.graphics().setDepth(400);
+    table.fillStyle(0x6b4a2b, 1).fillRect(400, 372, 180, 20);
+    table.fillStyle(0x7a5532, 1).fillRect(400, 372, 180, 4);
+    table.fillStyle(0x45301a, 1).fillRect(410, 392, 12, 44).fillRect(558, 392, 12, 44);
   }
 }
 
@@ -317,6 +994,9 @@ const SPEAKER_COLORS = {
   'Juno': '#8ce0b8',
   'Boss Harrow': '#ff6b6b',
   'Ren': '#c4a7ff',
+  'Papa': '#e0b070',
+  'Collector Voss': '#9fd36b',
+  'Guard': '#8fa8d8',
 };
 
 // bg: which backdrop to show. speaker: null = narration.
@@ -345,23 +1025,8 @@ class StoryScene extends Phaser.Scene {
     this.typing = false;
     this.leaving = false;
     this.bgObjects = [];
-
-    // Dialogue box
-    const boxY = 470;
-    this.add.rectangle(WIDTH / 2, boxY + 70, WIDTH - 60, 140, 0x140e0a, 0.94)
-      .setStrokeStyle(3, 0xb5893a).setDepth(100);
-    this.add.rectangle(WIDTH / 2, boxY + 70, WIDTH - 72, 128).setStrokeStyle(1, 0x6e5020).setDepth(100);
-    this.nameText = this.add.text(50, boxY + 12, '', {
-      fontFamily: 'monospace', fontSize: '18px', fontStyle: 'bold', color: '#ffffff',
-    }).setDepth(101);
-    this.bodyText = this.add.text(50, boxY + 42, '', {
-      fontFamily: 'monospace', fontSize: '18px', color: '#f0e2c8',
-      wordWrap: { width: WIDTH - 110 }, lineSpacing: 6,
-    }).setDepth(101);
-    this.hint = this.add.text(WIDTH - 46, boxY + 120, 'SPACE ▶', {
-      fontFamily: 'monospace', fontSize: '13px', color: '#c9a227',
-    }).setOrigin(1, 0.5).setDepth(101);
-    this.tweens.add({ targets: this.hint, alpha: 0.3, duration: 500, yoyo: true, repeat: -1 });
+    this.box = new DialogueBox(this);
+    this.cameras.main.fadeIn(500, 0, 0, 0);
     this.add.text(WIDTH - 30, 20, 'ESC: skip story', {
       fontFamily: 'monospace', fontSize: '12px', color: '#8a7a5e',
     }).setOrigin(1, 0).setDepth(101);
@@ -375,41 +1040,14 @@ class StoryScene extends Phaser.Scene {
   advance() {
     if (this.leaving) return;
     // First press while text is typing just finishes the line
-    if (this.typing) {
-      this.typeEvent.remove();
-      this.bodyText.setText(this.fullText);
-      this.typing = false;
-      return;
-    }
+    if (this.box.finish()) return;
 
     this.index++;
     if (this.index >= STORY.length) return this.startMission();
 
     const line = STORY[this.index];
     if (line.bg !== this.currentBg) this.drawBackdrop(line.bg);
-
-    if (line.speaker) {
-      this.nameText.setText(line.speaker).setColor(SPEAKER_COLORS[line.speaker] || '#ffffff');
-      this.bodyText.setFontStyle('normal').setColor('#f0e2c8');
-    } else {
-      this.nameText.setText('');
-      this.bodyText.setFontStyle('italic').setColor('#c2b293');
-    }
-
-    // Typewriter effect
-    this.fullText = line.text;
-    this.bodyText.setText('');
-    this.typing = true;
-    let i = 0;
-    this.typeEvent = this.time.addEvent({
-      delay: 22,
-      repeat: line.text.length - 1,
-      callback: () => {
-        i++;
-        this.bodyText.setText(line.text.slice(0, i));
-        if (i >= line.text.length) this.typing = false;
-      },
-    });
+    this.box.show(line.speaker, line.text);
   }
 
   startMission() {
@@ -1161,7 +1799,7 @@ new Phaser.Game({
   backgroundColor: '#140e0a',
   physics: { default: 'arcade', arcade: { debug: false } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, StoryScene, FactoryScene],
+  scene: [BootScene, PrologueScene, StoryScene, FactoryScene],
 });
 </script>
 </body>
