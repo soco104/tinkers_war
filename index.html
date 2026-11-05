@@ -12,7 +12,12 @@
       overflow: hidden;
     }
     #game { width: 100%; height: 100%; }
-    #game canvas { display: block; box-shadow: 0 0 40px #000; }
+    #game canvas { display: block; box-shadow: 0 0 40px #000; image-rendering: pixelated; }
+    #local-file-note {
+      max-width: 520px; margin: 15vh auto; padding: 24px 28px; color: #f0e2c8;
+      background: #1a120c; border: 2px solid #b5893a; font: 15px/1.5 monospace;
+    }
+    #local-file-note code { color: #e2bd55; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
 </head>
@@ -73,12 +78,133 @@ const C = {
   fire: 0xff7a1a,
 };
 
-// Health bar art: "Steampunk HP Bars" (Version 1) by mental.bloxx (Instagram @mental.bloxx).
-// The full (A) and empty (G) sheets are embedded so the game still runs from a double-clicked file.
-// Each sheet holds 6 animation frames of the heart, stacked vertically.
-const HPBAR_FULL_PNG = 'data:image/png;base64,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';
-const HPBAR_EMPTY_PNG = 'data:image/png;base64,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';
+// ---------------------------------------------------------------------------
+// Art. Everything the game loads lives in art/ (copied unmodified from the asset packs;
+// see CREDITS.md). At startup every gameplay sprite is put on one shared pixel grid:
+// pixel-art sheets are scaled PX times, and higher-resolution art (junkyard props, gears,
+// the code-drawn characters) is resampled onto the same grid.
+// ---------------------------------------------------------------------------
+const PX = 2; // on-screen size of one art pixel
+
+// Shown on the win screen (full details in CREDITS.md)
+const CREDITS = [
+  'Graphics created by Penzilla Design (Top-Down Retro Interior)',
+  'Health bar: "Steampunk HP Bars" by mental.bloxx  |  Effects: "Free Ambient Effects" by SovDigital',
+  'Also: Old House tile set, Junkyard_1, Animated Gears (see CREDITS.md)',
+];
+
+const IMAGES = {
+  retro_floors: 'art/interior/retro_floors_walls.png',     // Top-Down Retro Interior (Penzilla Design)
+  retro_doors: 'art/interior/retro_doors_windows.png',
+  retro_furniture: 'art/interior/retro_furniture.png',
+  retro_small: 'art/interior/retro_small_items.png',
+  old_house_objects: 'art/interior/old_house_objects.png', // Old house tile set
+  old_house_tiles: 'art/interior/old_house_tiles.png',
+  junkyard: 'art/props/junkyard.png',                      // Junkyard_1
+  light_shafts: 'art/fx/light_shafts.png',                 // Free Ambient Effects (SovDigital)
+  hpbar_full: 'art/ui/hpbar_full.png',                     // Steampunk HP Bars (mental.bloxx)
+  hpbar_empty: 'art/ui/hpbar_empty.png',
+};
+const GEAR_FRAMES = 24; // art/gears/gear_00..23.png: every 10th frame of Animated_Gears set 8
+
+// Health bar sheets hold 6 animation frames of the heart, stacked vertically.
 const HPBAR_FRAME = { w: 124, h: 28, stride: 43, count: 6, liquidStart: 27, liquidEnd: 110 };
+
+// Sprites cut from the sheets: key -> [sheet, x, y, w, h, mode]
+// mode 'scale' (default): pixel art scaled PX times. 'resample': finer art kept at the same
+// on-screen size but redrawn on the PX grid.
+const SPRITES = {
+  // Top-Down Retro Interior
+  floor_planks: ['retro_floors', 24, 82, 48, 40],
+  floor_terracotta: ['retro_floors', 210, 88, 32, 32],
+  floor_grate: ['retro_floors', 242, 98, 13, 12],
+  wall_panel: ['retro_floors', 80, 52, 16, 26],
+  door_frame: ['retro_doors', 97, 0, 30, 49],
+  door_closed: ['retro_doors', 131, 2, 26, 46],
+  window: ['retro_doors', 100, 51, 25, 28],
+  wood_stove: ['retro_furniture', 148, 112, 24, 40],
+  table: ['retro_furniture', 1, 32, 46, 30],
+  pot_rack: ['retro_furniture', 68, 238, 24, 16],
+  teapot: ['retro_small', 112, 116, 16, 11],
+  teacup: ['retro_small', 68, 102, 10, 9],
+  cook_pot: ['retro_small', 65, 66, 14, 13],
+  wall_clock: ['retro_small', 80, 16, 15, 15],
+  candle: ['retro_small', 39, 51, 5, 12],
+  // Old house tile set
+  wallpaper: ['old_house_tiles', 0, 0, 16, 48],
+  workbench: ['old_house_objects', 99, 1, 42, 27],
+  desk_drawers: ['old_house_objects', 65, 83, 30, 25],
+  counter: ['old_house_objects', 1, 149, 46, 24],
+  chair: ['old_house_objects', 71, 207, 18, 33],
+  wall_pipe: ['old_house_objects', 17, 200, 46, 15],
+  bucket: ['old_house_objects', 84, 49, 8, 13],
+  crate_small: ['old_house_objects', 82, 65, 12, 13],
+  gears_small: ['old_house_objects', 145, 35, 14, 9],
+  rug: ['old_house_objects', 4, 81, 56, 30],
+  // Junkyard_1 (finer pixel art, resampled onto the grid)
+  junk_gears: ['junkyard', 192, 192, 62, 57, 'resample'],
+  junk_scrap: ['junkyard', 304, 192, 62, 48, 'resample'],
+  junk_pipes: ['junkyard', 19, 576, 125, 122, 'resample'],
+  junk_small_gears: ['junkyard', 674, 195, 38, 39, 'resample'],
+  junk_plates: ['junkyard', 96, 192, 61, 61, 'resample'],
+  junk_tires: ['junkyard', 60, 37, 62, 56, 'resample'],
+  drum: ['junkyard', 154, 288, 28, 48, 'resample'],
+  crate: ['junkyard', 343, 331, 33, 47, 'resample'],
+};
+
+// Animated effects from Free Ambient Effects (frame size, count, fps, loop, pivot from each JSON)
+const FX = {
+  steam: { file: 'steam_vent', w: 256, h: 320, frames: 8, fps: 10, loop: true, pivot: [128, 299] },
+  smoke: { file: 'smoke_column', w: 256, h: 384, frames: 8, fps: 10, loop: true, pivot: [128, 360] },
+  sparks: { file: 'sparks_burst', w: 256, h: 256, frames: 6, fps: 14, loop: false, pivot: [63, 131] },
+  embers: { file: 'ember_burst', w: 256, h: 256, frames: 6, fps: 12, loop: false, pivot: [128, 217] },
+  emberSwirl: { file: 'ember_swirl', w: 256, h: 280, frames: 8, fps: 12, loop: true, pivot: [128, 256] },
+  dust: { file: 'dust_swirl', w: 256, h: 280, frames: 8, fps: 12, loop: true, pivot: [128, 253] },
+};
+
+// Play an effect at (x, y). One-shot effects remove themselves when done.
+function spawnFx(scene, name, x, y, opts = {}) {
+  const fx = FX[name];
+  const s = scene.add.sprite(x, y, `fx_${name}`)
+    .setOrigin(fx.pivot[0] / fx.w, fx.pivot[1] / fx.h)
+    .setScale(opts.scale ?? 0.25)
+    .setAlpha(opts.alpha ?? 1)
+    .setDepth(opts.depth ?? 1500);
+  if (opts.add) s.setBlendMode('ADD');
+  if (opts.tint !== undefined) s.setTint(opts.tint);
+  if (opts.flipX) s.setFlipX(true);
+  s.play({ key: `fx_${name}`, startFrame: opts.randomStart ? Phaser.Math.Between(0, fx.frames - 1) : 0 });
+  if (!fx.loop) s.once('animationcomplete', () => s.destroy());
+  return s;
+}
+
+// Redraw part of an image onto a coarse pixel grid and store it as a texture.
+// The grid is (outW/P) x (outH/P); each grid cell becomes a P x P block on screen.
+function bakePixelTexture(scene, key, src, sx, sy, sw, sh, outW, outH, P, alphaCut) {
+  const gw = Math.max(1, Math.round(outW / P));
+  const gh = Math.max(1, Math.round(outH / P));
+  const small = document.createElement('canvas');
+  small.width = gw;
+  small.height = gh;
+  const sctx = small.getContext('2d');
+  sctx.imageSmoothingEnabled = gw !== sw || gh !== sh; // exact copy for pixel art at 1:1
+  sctx.imageSmoothingQuality = 'high';
+  sctx.drawImage(src, sx, sy, sw, sh, 0, 0, gw, gh);
+  if (alphaCut) {
+    // Hard edges, like hand-made pixel art
+    const img = sctx.getImageData(0, 0, gw, gh);
+    for (let i = 3; i < img.data.length; i += 4) img.data[i] = img.data[i] >= 110 ? 255 : 0;
+    sctx.putImageData(img, 0, 0);
+  }
+  if (scene.textures.exists(key)) scene.textures.remove(key);
+  const tex = scene.textures.createCanvas(key, gw * P, gh * P);
+  const ctx = tex.getContext();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(small, 0, 0, gw * P, gh * P);
+  tex.refresh();
+  tex.setFilter(Phaser.Textures.FilterMode.NEAREST); // stays crisp when zoomed
+  return tex;
+}
 
 // Level layout: walls and crates as {x, y, w, h} (top-left corner)
 const WALLS = [
@@ -116,6 +242,18 @@ const STEAM_VENTS = [
   { x: 210, y: 244 }, { x: 210, y: 376 }, { x: 710, y: 224 }, { x: 710, y: 336 }, { x: 490, y: 146 },
 ];
 
+// Hazard drums: cover that blocks movement and line of sight. (x, y) is the drum's base.
+const BARRELS = [
+  { x: 485, y: 332 }, { x: 140, y: 340 }, { x: 600, y: 100 }, { x: 840, y: 380 }, { x: 320, y: 545 },
+];
+// Junk piles against the walls (solid); the footprint is the bottom strip of the sprite
+const JUNK = [
+  { key: 'junk_small_gears', x: 50, y: 272 }, { key: 'junk_scrap', x: 262, y: 614 }, { key: 'junk_tires', x: 900, y: 614 },
+];
+const PRESSURE_GAUGES = [[210, 110], [710, 110], [450, 160], [210, 520], [710, 500], [530, 480]];
+const WALL_GEARS = [[210, 180], [210, 440], [710, 170], [710, 420], [500, 160], [470, 480]];
+const WALL_LAMPS = [[22, 330], [938, 330], [330, 618], [620, 618]];
+
 // ---------------------------------------------------------------------------
 // Drawing helpers
 // ---------------------------------------------------------------------------
@@ -139,116 +277,6 @@ function drawGauge(g, x, y) {
   g.fillStyle(0xf2e6c9, 1).fillCircle(x, y, 5.5);
   g.lineStyle(1.5, 0xb03020, 1).lineBetween(x, y, x + 3.5, y - 3);
   g.fillStyle(0x222222, 1).fillCircle(x, y, 1);
-}
-
-// Toothed cog: polygon teeth around a disc with a hub hole
-function drawCog(g, x, y, r, teeth, color = C.brass, hole = 0x1a110b) {
-  g.fillStyle(color, 1);
-  const w = Math.PI / teeth * 0.55;
-  for (let i = 0; i < teeth; i++) {
-    const a = (i / teeth) * Math.PI * 2;
-    g.fillPoints([
-      { x: x + Math.cos(a - w) * r * 0.9, y: y + Math.sin(a - w) * r * 0.9 },
-      { x: x + Math.cos(a - w * 0.6) * r * 1.22, y: y + Math.sin(a - w * 0.6) * r * 1.22 },
-      { x: x + Math.cos(a + w * 0.6) * r * 1.22, y: y + Math.sin(a + w * 0.6) * r * 1.22 },
-      { x: x + Math.cos(a + w) * r * 0.9, y: y + Math.sin(a + w) * r * 0.9 },
-    ], true);
-  }
-  g.fillCircle(x, y, r);
-  g.lineStyle(1, 0x000000, 0.25).strokeCircle(x, y, r * 0.68);
-  g.fillStyle(hole, 1).fillCircle(x, y, r * 0.3);
-}
-
-function drawSpring(g, x, y, len, rad, vertical = true, color = 0x9aa3a8) {
-  g.lineStyle(2, color, 1);
-  const coils = Math.max(3, Math.round(len / 5));
-  for (let i = 0; i < coils; i++) {
-    const t = (i / (coils - 1)) * len;
-    if (vertical) g.strokeEllipse(x, y + t, rad * 2, 5);
-    else g.strokeEllipse(x + t, y, 5, rad * 2);
-  }
-}
-
-// Wrench hanging head-up from a nail
-function drawHangingWrench(g, x, y, len, wallColor) {
-  g.fillStyle(0x1a110b, 1).fillCircle(x, y - 2, 1.5);                    // nail
-  g.fillStyle(0x8a939a, 1).fillRect(x - 2, y + 4, 4, len);
-  g.fillCircle(x, y + 4, 6).fillCircle(x, y + len + 2, 4);
-  g.fillStyle(wallColor, 1).fillRect(x - 2, y - 3, 4, 6);                // open jaw
-}
-
-function drawPiston(g, x, y, len, vertical = false) {
-  if (vertical) {
-    g.fillStyle(0xb8c0c4, 1).fillRect(x - 2, y, 4, len * 0.5);
-    g.fillStyle(C.brass, 1).fillRoundedRect(x - 7, y + len * 0.45, 14, len * 0.55, 3);
-    g.fillStyle(C.brassDark, 1).fillRect(x - 7, y + len * 0.45, 14, 3);
-  } else {
-    g.fillStyle(0xb8c0c4, 1).fillRect(x + len * 0.5, y - 2, len * 0.5, 4);
-    g.fillStyle(C.brass, 1).fillRoundedRect(x, y - 7, len * 0.55, 14, 3);
-    g.fillStyle(C.brassDark, 1).fillRect(x + len * 0.55 - 3, y - 7, 3, 14);
-  }
-}
-
-// A heap of mechanical junk: cogs, springs, pipe offcuts, plates, nuts, pistons.
-// Seeded so every pile looks hand-placed but stays the same each time.
-function drawJunkPile(g, cx, baseY, width, height, count, seed) {
-  const rng = new Phaser.Math.RandomDataGenerator([String(seed)]);
-  const metals = [C.brass, C.copper, 0x7a6a4a, C.brassDark, 0x6a6f72, 0x8a939a, 0x5a4a3a];
-
-  // Shadow and dark heap underneath
-  g.fillStyle(0x000000, 0.35).fillEllipse(cx, baseY + 2, width * 1.1, 14);
-  g.fillStyle(0x241a12, 1).fillTriangle(cx - width / 2, baseY, cx + width / 2, baseY, cx, baseY - height * 0.8);
-  g.fillEllipse(cx, baseY - 4, width, height * 0.5);
-
-  // Pick positions inside a triangular mound, draw back (high) to front (low)
-  const items = [];
-  for (let i = 0; i < count; i++) {
-    const up = Math.pow(rng.frac(), 1.4) * height;
-    const half = (width / 2) * (1 - up / height) + 4;
-    items.push({ x: cx + (rng.frac() * 2 - 1) * half, y: baseY - up - 4, kind: rng.between(0, 9), col: rng.pick(metals), s: rng.frac() });
-  }
-  items.sort((a, b) => a.y - b.y);
-
-  for (const it of items) {
-    const { x, y, col, s } = it;
-    switch (it.kind) {
-      case 0: case 1: case 2:                                    // cogs (most common)
-        drawCog(g, x, y, 4 + s * 9, 6 + Math.round(s * 5), col);
-        break;
-      case 3:                                                    // spring
-        drawSpring(g, x - 8, y, 16, 4 + s * 2, false, s > 0.5 ? 0x9aa3a8 : C.copperLight);
-        break;
-      case 4:                                                    // pipe offcut
-        drawPipe(g, x - 10 - s * 8, y, x + 10 + s * 8, y, 5);
-        break;
-      case 5: {                                                  // bent metal plate
-        const a = s * Math.PI, w = 10 + s * 8, h = 6 + s * 4;
-        const pts = [[-w, -h], [w, -h], [w, h], [-w, h]].map(([px, py]) => ({
-          x: x + px * Math.cos(a) - py * Math.sin(a), y: y + px * Math.sin(a) + py * Math.cos(a),
-        }));
-        g.fillStyle(col === C.brass ? 0x6a6f72 : col, 1).fillPoints(pts, true);
-        g.fillStyle(0x1a110b, 1).fillCircle(pts[0].x * 0.8 + x * 0.2, pts[0].y * 0.8 + y * 0.2, 1.2);
-        break;
-      }
-      case 6: {                                                  // hex nut
-        const r = 3 + s * 3;
-        const pts = [];
-        for (let k = 0; k < 6; k++) pts.push({ x: x + Math.cos(k * Math.PI / 3) * r, y: y + Math.sin(k * Math.PI / 3) * r });
-        g.fillStyle(0x8a939a, 1).fillPoints(pts, true);
-        g.fillStyle(0x1a110b, 1).fillCircle(x, y, r * 0.45);
-        break;
-      }
-      case 7:                                                    // piston
-        drawPiston(g, x - 12, y, 24 + s * 10);
-        break;
-      case 8:                                                    // old gauge
-        drawGauge(g, x, y);
-        break;
-      default:                                                   // dented can / canister
-        g.fillStyle(col, 1).fillRoundedRect(x - 5, y - 7, 10 + s * 4, 13, 2);
-        g.fillStyle(0x000000, 0.3).fillRect(x - 5, y - 7, 10 + s * 4, 2);
-    }
-  }
 }
 
 // Cute chibi character: big head, small body. `o` customises colours and extras.
@@ -402,16 +430,47 @@ CHARACTERS.collector_down = {
 class BootScene extends Phaser.Scene {
   constructor() { super('Boot'); }
 
+  preload() {
+    this.loadErrors = [];
+    this.load.on('loaderror', (file) => this.loadErrors.push(file.src));
+    const label = this.add.text(WIDTH / 2, HEIGHT / 2, 'Loading...', {
+      fontFamily: 'monospace', fontSize: '18px', color: '#e2bd55',
+    }).setOrigin(0.5);
+    this.load.on('progress', (p) => label.setText(`Loading... ${Math.round(p * 100)}%`));
+
+    for (const [key, path] of Object.entries(IMAGES)) this.load.image(key, path);
+    for (let i = 0; i < GEAR_FRAMES; i++) {
+      this.load.image(`gear_src_${i}`, `art/gears/gear_${String(i).padStart(2, '0')}.png`);
+    }
+    for (const [name, fx] of Object.entries(FX)) {
+      this.load.spritesheet(`fx_${name}`, `art/fx/${fx.file}.png`, { frameWidth: fx.w, frameHeight: fx.h });
+    }
+  }
+
   create() {
-    const make = (key, w, h, draw) => {
+    if (this.loadErrors.length) {
+      this.add.text(WIDTH / 2, HEIGHT / 2 + 40,
+        `Some art failed to load:\n${this.loadErrors.slice(0, 4).join('\n')}\n\nRun the game with start.bat or "node serve.js".`, {
+          fontFamily: 'monospace', fontSize: '14px', color: '#ff6b6b', align: 'center',
+        }).setOrigin(0.5);
+      return;
+    }
+
+    // Code-drawn art, resampled onto the shared pixel grid
+    const make = (key, w, h, draw, out = [w, h]) => {
       const g = this.make.graphics({ x: 0, y: 0 }, false);
       draw(g);
-      g.generateTexture(key, w, h);
+      g.generateTexture(`${key}__hd`, w, h);
       g.destroy();
+      const src = this.textures.get(`${key}__hd`).getSourceImage();
+      bakePixelTexture(this, key, src, 0, 0, w, h, out[0], out[1], PX, true);
+      this.textures.remove(`${key}__hd`);
     };
 
     for (const [key, opts] of Object.entries(CHARACTERS)) {
-      make(key, CHAR_W, CHAR_H, (g) => drawChibi(g, opts));
+      // Six-year-old Tinker is drawn smaller than everyone else
+      const out = key === 'tinker_kid' ? [36, 46] : [CHAR_W, CHAR_H];
+      make(key, CHAR_W, CHAR_H, (g) => drawChibi(g, opts), out);
     }
 
     // Wrench (pivot at the left end of the handle)
@@ -419,18 +478,6 @@ class BootScene extends Phaser.Scene {
       g.fillStyle(0x9aa3a8, 1).fillRoundedRect(0, 4, 22, 4, 2);
       g.fillStyle(0x7a4a24, 1).fillRoundedRect(0, 3.5, 9, 5, 2);
       g.fillStyle(0xb8c0c4, 1).fillRoundedRect(19, 0, 7, 12, 2).fillRect(25, 0, 6, 4).fillRect(25, 8, 6, 4);
-    });
-
-    // Riveted metal floor plate
-    make('plate', 40, 40, (g) => {
-      g.fillStyle(0x16110e, 1).fillRect(0, 0, 40, 40);
-      g.fillStyle(0x241d18, 1).fillRect(1, 1, 38, 38);
-      g.fillStyle(0x2f2620, 1).fillRect(1, 1, 38, 2).fillRect(1, 1, 2, 38);
-      g.fillStyle(0x110d0a, 1).fillRect(1, 37, 38, 2).fillRect(37, 1, 2, 38);
-      for (const [x, y] of [[6, 6], [34, 6], [6, 34], [34, 34]]) {
-        g.fillStyle(0x4d3d2c, 1).fillCircle(x, y, 2.2);
-        g.fillStyle(0x8a6d4b, 1).fillCircle(x - 0.6, y - 0.6, 0.9);
-      }
     });
 
     // Brass furnace (60x70, fire is a separate sprite)
@@ -447,7 +494,6 @@ class BootScene extends Phaser.Scene {
       g.fillStyle(0x1a0e08, 1).fillRect(18, 38, 24, 22);
     });
 
-    // Flame
     make('flame', 24, 32, (g) => {
       g.fillStyle(0xff5a00, 1).fillEllipse(12, 22, 20, 18).fillTriangle(3, 20, 21, 20, 12, 1);
       g.fillStyle(0xffa600, 1).fillEllipse(12, 24, 13, 12).fillTriangle(6, 23, 18, 23, 12, 8);
@@ -455,7 +501,6 @@ class BootScene extends Phaser.Scene {
     });
 
     // Prologue props
-    make('cog', 40, 40, (g) => drawCog(g, 20, 20, 15, 10, 0xffffff, 0x1a110b));
     make('knife', 20, 6, (g) => {
       g.fillStyle(0x5e3719, 1).fillRoundedRect(0, 1, 7, 4, 1);
       g.fillStyle(0xd0d6da, 1).fillRect(7, 1.5, 9, 3).fillTriangle(16, 1.5, 20, 3, 16, 4.5);
@@ -464,11 +509,40 @@ class BootScene extends Phaser.Scene {
       g.fillStyle(0x1a1a1a, 1).fillEllipse(18, 7, 24, 14).fillEllipse(18, 12, 36, 7);
       g.fillStyle(0x5a2a2a, 1).fillRect(6, 9, 24, 2);
     });
-    make('cup', 14, 12, (g) => {
-      g.fillStyle(0xe8dcc0, 1).fillRoundedRect(1, 3, 8, 8, 2);
-      g.lineStyle(1.5, 0xe8dcc0, 1).strokeCircle(10.5, 7, 2.2);
-      g.fillStyle(0x7a4a24, 1).fillRect(2, 4, 6, 2);
-    });
+
+    // Sprites cut from the art sheets
+    for (const [key, [sheet, x, y, w, h, mode]] of Object.entries(SPRITES)) {
+      const src = this.textures.get(sheet).getSourceImage();
+      if (mode === 'resample') bakePixelTexture(this, key, src, x, y, w, h, w, h, PX, true);
+      else bakePixelTexture(this, key, src, x, y, w, h, w * PX, h * PX, PX, false);
+    }
+    this.makeHazardDrum();
+
+    // Spinning gears (Animated_Gears), resampled onto the grid
+    const gearKeys = [];
+    for (let i = 0; i < GEAR_FRAMES; i++) {
+      const src = this.textures.get(`gear_src_${i}`).getSourceImage();
+      bakePixelTexture(this, `gear_${i}`, src, 0, 0, 128, 128, 64, 64, PX, true);
+      gearKeys.push({ key: `gear_${i}` });
+    }
+    this.anims.create({ key: 'gear_spin', frames: gearKeys, frameRate: 12, repeat: -1 });
+
+    // Effect animations
+    for (const [name, fx] of Object.entries(FX)) {
+      this.anims.create({
+        key: `fx_${name}`, frameRate: fx.fps, repeat: fx.loop ? -1 : 0,
+        frames: this.anims.generateFrameNumbers(`fx_${name}`, { start: 0, end: fx.frames - 1 }),
+      });
+    }
+
+    // Health bar: slice each sheet into its 6 heart frames
+    for (const key of ['hpbar_full', 'hpbar_empty']) {
+      const tex = this.textures.get(key);
+      for (let i = 0; i < HPBAR_FRAME.count; i++) {
+        tex.add(i, 0, 0, i * HPBAR_FRAME.stride, HPBAR_FRAME.w, HPBAR_FRAME.h);
+      }
+      tex.setFilter(Phaser.Textures.FilterMode.NEAREST);
+    }
 
     // Soft radial textures (glow, steam, vignette) via canvas gradients
     const radial = (key, w, h, stops, inner = 0) => {
@@ -484,23 +558,27 @@ class BootScene extends Phaser.Scene {
     radial('puff', 64, 64, [[0, 'rgba(255,255,255,0.8)'], [1, 'rgba(255,255,255,0)']]);
     radial('vignette', WIDTH, HEIGHT, [[0, 'rgba(0,0,0,0)'], [0.5, 'rgba(0,0,0,0)'], [1, 'rgba(8,4,2,0.7)']], 0);
 
-    // Health bar art (embedded PNGs): slice each sheet into its 6 frames once loaded
-    let pending = 2;
-    const onAdd = (key) => {
-      if (key !== 'hpbar_full' && key !== 'hpbar_empty') return;
-      const tex = this.textures.get(key);
-      for (let i = 0; i < HPBAR_FRAME.count; i++) {
-        tex.add(i, 0, 0, i * HPBAR_FRAME.stride, HPBAR_FRAME.w, HPBAR_FRAME.h);
-      }
-      tex.setFilter(Phaser.Textures.FilterMode.NEAREST); // keep the pixel art crisp
-      if (--pending === 0) {
-        this.textures.off('addtexture', onAdd);
-        this.startGame();
-      }
-    };
-    this.textures.on('addtexture', onAdd);
-    this.textures.addBase64('hpbar_full', HPBAR_FULL_PNG);
-    this.textures.addBase64('hpbar_empty', HPBAR_EMPTY_PNG);
+    this.startGame();
+  }
+
+  // The junkyard oil drum with a yellow-and-black hazard band painted on (pixel-aligned)
+  makeHazardDrum() {
+    const base = this.textures.get('drum').getSourceImage();
+    const w = base.width, h = base.height;
+    const tex = this.textures.createCanvas('drum_hazard', w, h);
+    const ctx = tex.getContext();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(base, 0, 0);
+    ctx.globalCompositeOperation = 'source-atop'; // only paint where the drum is
+    const top = Math.round(h * 0.36 / PX) * PX, band = 4 * PX;
+    for (let x = -band; x < w + band; x += PX) {
+      const stripe = Math.floor((x + 1000) / (3 * PX)) % 2 === 0;
+      ctx.fillStyle = stripe ? '#e8b51a' : '#1a1410';
+      ctx.fillRect(x, top, PX, band);
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, top + band - PX, w, PX);
+    tex.refresh();
   }
 
   startGame() {
@@ -579,6 +657,18 @@ class DialogueBox {
 // Prologue: the night Tinker's father was taken
 // ---------------------------------------------------------------------------
 
+// Layout of the prologue home, in world coordinates. The room is small on purpose:
+// the main camera shows it zoomed 1.5x (each 2px art pixel becomes exactly 3 screen pixels),
+// while a second, unzoomed camera draws the dialogue box and fades.
+const HOME = {
+  w: 600, h: 290,          // room interior
+  floorY: 96,              // where the back wall meets the floor
+  zoom: 1.5,
+  camCenter: { x: 300, y: 203 },
+  door: { x: 536, y: 100 },        // front door threshold (feet position)
+  sideExit: { x: -40, y: 200 },    // open doorway in the left wall, to the back room
+};
+
 class PrologueScene extends Phaser.Scene {
   constructor() { super('Prologue'); }
 
@@ -587,34 +677,49 @@ class PrologueScene extends Phaser.Scene {
     this.stepIndex = -1;
     this.busy = false;
 
+    // Two cameras: the main one shows the room zoomed in, the UI camera draws the dialogue.
+    // Every room object is registered with inWorld() so the UI camera skips it.
+    this.uiCam = this.cameras.add(0, 0, WIDTH, HEIGHT);
     this.drawHome();
 
-    const actor = (key, x, y, scale = 2) =>
-      this.add.image(x, y, key).setOrigin(0.5, FEET_Y / CHAR_H).setScale(scale);
-    this.papa = actor('papa', 170, 420);
-    this.ren = actor('ren', 350, 410);
-    this.kid = actor('tinker_kid', 255, 448, 1.3);
-    this.voss = actor('collector', 1020, 390);
-    this.guardA = actor('guard', 1020, 400);
-    this.guardB = actor('guard', 1060, 420);
+    const actor = (key, x, y) => this.inWorld(this.add.image(x, y, key).setOrigin(0.5, FEET_Y / CHAR_H));
+    this.papa = actor('papa', 60, 222);
+    this.ren = actor('ren', 176, 128);
+    this.kid = actor('tinker_kid', 112, 236);
+    this.voss = actor('collector', HOME.door.x, HOME.door.y).setAlpha(0);
+    this.guardA = actor('guard', HOME.door.x, HOME.door.y).setAlpha(0);
+    this.guardB = actor('guard', HOME.door.x, HOME.door.y).setAlpha(0);
     this.actors = [this.papa, this.ren, this.kid, this.voss, this.guardA, this.guardB];
-    this.knife = this.add.image(545, 378, 'knife').setDepth(401);
-    this.cup = this.add.image(424, 281, 'cup').setDepth(331).setScale(1.4);
+    this.knife = this.inWorld(this.add.image(354, 188, 'knife').setDepth(225));
+    this.cup = this.inWorld(this.add.image(226, 92, 'teacup').setOrigin(0.5, 1).setDepth(113));
 
+    // Screen-space UI: night vignette, blackout, title cards, dialogue box
+    const ui = [];
+    ui.push(this.add.image(0, 0, 'vignette').setOrigin(0).setDepth(1800));
     this.blackout = this.add.rectangle(WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT, 0x000000).setDepth(DEPTH_BLACKOUT);
     this.centerText = this.add.text(WIDTH / 2, HEIGHT / 2 - 30, '', {
       fontFamily: 'monospace', fontSize: '30px', color: '#e2bd55', align: 'center',
     }).setOrigin(0.5).setDepth(DEPTH_UI).setAlpha(0);
     this.box = new DialogueBox(this).setVisible(false);
-    this.add.text(WIDTH - 30, 44, 'ESC: skip prologue', {
+    const skip = this.add.text(WIDTH - 30, 44, 'ESC: skip prologue', {
       fontFamily: 'monospace', fontSize: '12px', color: '#a8916a',
       backgroundColor: '#140e0acc', padding: { x: 5, y: 3 },
     }).setOrigin(1, 0).setDepth(DEPTH_UI + 1);
+    ui.push(this.blackout, this.centerText, skip, ...this.box.parts);
+
+    const cam = this.cameras.main;
+    cam.setBackgroundColor('#0b0705').setZoom(HOME.zoom).centerOn(HOME.camCenter.x, HOME.camCenter.y);
+    cam.ignore(ui);
 
     this.steps = this.buildSteps();
     this.input.keyboard.on('keydown-SPACE', () => this.advance());
     this.input.keyboard.on('keydown-ESC', () => this.toStory());
     this.next();
+  }
+
+  inWorld(obj) {
+    this.uiCam.ignore(obj);
+    return obj;
   }
 
   update() {
@@ -665,7 +770,8 @@ class PrologueScene extends Phaser.Scene {
     if (this.leaving) return;
     this.leaving = true;
     this.cameras.main.fadeOut(600, 0, 0, 0);
-    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('Story'));
+    this.uiCam.fadeOut(600, 0, 0, 0);
+    this.uiCam.once('camerafadeoutcomplete', () => this.scene.start('Story'));
   }
 
   // --- Animation helpers -----------------------------------------------------
@@ -682,7 +788,7 @@ class PrologueScene extends Phaser.Scene {
   }
 
   hop(a, times = 2) {
-    this.tweens.add({ targets: a, y: a.y - 12, duration: 120, yoyo: true, repeat: times - 1, ease: 'Quad.easeOut' });
+    this.tweens.add({ targets: a, y: a.y - 8, duration: 120, yoyo: true, repeat: times - 1, ease: 'Quad.easeOut' });
   }
 
   shake(a, dist, times, ms = 50) {
@@ -691,6 +797,21 @@ class PrologueScene extends Phaser.Scene {
 
   fadeFromBlack(ms) { this.tweens.add({ targets: this.blackout, alpha: 0, duration: ms }); }
   fadeToBlack(ms) { this.tweens.add({ targets: this.blackout, alpha: 1, duration: ms }); }
+
+  // Step in through the front door: appear on the threshold, then walk into the room
+  enter(a, x, y, ms, delay = 0) {
+    this.time.delayedCall(delay, () => {
+      a.setPosition(HOME.door.x, HOME.door.y).setAlpha(0);
+      this.tweens.add({ targets: a, alpha: 1, duration: 250 });
+      this.walk(a, x, y, ms);
+    });
+  }
+
+  // Walk out through the front door and disappear
+  exit(a, ms, delay = 0) {
+    this.walk(a, HOME.door.x, HOME.door.y, ms, delay);
+    this.tweens.add({ targets: a, alpha: 0, duration: 250, delay: delay + ms - 150 });
+  }
 
   // --- The script ------------------------------------------------------------
 
@@ -703,330 +824,178 @@ class PrologueScene extends Phaser.Scene {
       { run: () => this.hop(this.kid, 3), ms: 400,
         speaker: 'Tinker', text: 'Sing, music box! Sing!' },
       { speaker: 'Ren', text: "Papa, she should be in bed. And supper's nearly ready." },
-      { run: () => { this.shake(this.door, 3, 6); this.cameras.main.shake(500, 0.004); }, ms: 600,
+      { run: () => { this.shake(this.door, 2, 6); this.cameras.main.shake(500, 0.004); }, ms: 600,
         text: 'KNOCK. KNOCK. KNOCK.' },
       { run: () => {
-          this.door.setFillStyle(0x07080e);
-          this.doorKnob.setVisible(false);
-          this.walk(this.voss, 760, 390, 1100);
-          this.walk(this.guardA, 850, 400, 1000, 250);
-          this.walk(this.guardB, 905, 422, 1000, 450);
+          this.door.setVisible(false); // swung open onto the dark street
+          this.enter(this.voss, 470, 150, 900);
+          this.enter(this.guardA, 520, 130, 600, 300);
+          this.enter(this.guardB, 566, 152, 600, 500);
         }, ms: 1450,
         speaker: 'Collector Voss', text: "Good evening! Collector Voss, Ministry of Heat. It's tax night, I'm afraid." },
-      { run: () => { this.walk(this.guardA, 1020, 400, 700); this.walk(this.guardB, 1060, 422, 700); }, ms: 700,
+      { run: () => { this.exit(this.guardA, 500); this.exit(this.guardB, 500, 100); }, ms: 650,
         speaker: 'Collector Voss', text: 'Wait outside, boys. This is a friendly visit.' },
-      { run: () => this.walk(this.voss, 480, 390, 1300), ms: 1300,
+      { run: () => this.walk(this.voss, 330, 178, 1100), ms: 1100,
         speaker: 'Collector Voss', text: 'Coal tax. Chimney tax. Gear tax. And a little something for my trouble.' },
       { speaker: 'Papa', text: 'We paid last month. We barely have enough for—' },
       { speaker: 'Collector Voss', text: 'Then fetch what you barely have.' },
-      { run: () => this.walk(this.papa, -60, 420, 1500), ms: 1500,
+      { run: () => this.walk(this.papa, HOME.sideExit.x, HOME.sideExit.y, 1100), ms: 1100,
         speaker: 'Papa', text: "...Ren, get the collector some tea. I'll find the money." },
       // Ren makes the tea in the kitchen corner
       { run: () => {
-          this.ren.setFlipX(false);
-          this.walk(this.ren, 415, 405, 600);
-          this.time.delayedCall(700, () => {
-            this.kettleSteam.explode(14);
-            this.tweens.add({ targets: this.kettle, x: 370, duration: 40, yoyo: true, repeat: 7 });
+          this.walk(this.ren, 140, 124, 450);
+          this.time.delayedCall(600, () => {
+            const whistle = this.inWorld(spawnFx(this, 'steam', 142, 72, { scale: 0.18, alpha: 0.85, depth: 300 }));
+            whistle.once('animationrepeat', () => whistle.destroy()); // one big puff
+            this.tweens.add({ targets: this.teapot, x: this.teapot.x + 2, duration: 40, yoyo: true, repeat: 7 });
           });
-          this.time.delayedCall(1300, () => {
+          this.time.delayedCall(1250, () => {
             this.cup.setDepth(1000);
-            this.tweens.add({ targets: this.cup, x: 434, y: 392, duration: 300 });
+            this.tweens.add({ targets: this.cup, x: 154, y: 114, duration: 300 });
           });
         }, ms: 1700,
         text: 'The kettle whistles. Ren pours the tea with shaking hands.' },
       { run: () => {
-          this.walk(this.ren, 575, 410, 1200);
-          this.tweens.add({ targets: this.cup, x: 520, y: 374, duration: 1200 });
-          this.time.delayedCall(1200, () => this.cup.setDepth(402));
-        }, ms: 1200,
+          this.walk(this.ren, 392, 210, 1100);
+          this.tweens.add({ targets: this.cup, x: 352, y: 186, duration: 1100 });
+          this.time.delayedCall(1100, () => this.cup.setDepth(225));
+        }, ms: 1100,
         speaker: 'Ren', text: '...Your tea, sir.' },
       { run: () => {
-          this.tweens.add({ targets: this.voss, x: 505, duration: 200 });
-          this.tweens.add({ targets: this.ren, x: 555, duration: 200 });
+          this.tweens.add({ targets: this.voss, x: 344, duration: 200 });
+          this.tweens.add({ targets: this.ren, x: 380, duration: 200 });
           this.ren.setFlipX(true);
         }, ms: 300,
         speaker: 'Collector Voss', text: 'My, my. What a pretty girl. Perhaps she could work off what your father owes.' },
-      { run: () => { this.shake(this.ren, 12, 6, 60); this.cameras.main.shake(400, 0.006); }, ms: 700,
+      { run: () => { this.shake(this.ren, 6, 6, 60); this.cameras.main.shake(400, 0.006); }, ms: 700,
         speaker: 'Ren', text: 'Let go of me!' },
       // The struggle, then a hard cut to black
       { run: () => {
-          this.shake(this.ren, 14, 4, 60);
-          this.shake(this.voss, -10, 4, 60);
+          this.shake(this.ren, 8, 4, 60);
+          this.shake(this.voss, -6, 4, 60);
           this.cameras.main.shake(450, 0.01);
           this.time.delayedCall(500, () => this.blackout.setAlpha(1));
         }, ms: 900, auto: true },
       { run: () => {
-          // Rearrange the room while the screen is black
-          // Voss lies still on the floor in front of the table, his hat knocked off
-          this.voss.setTexture('collector_down').setPosition(462, 416).setAngle(-90)
+          // Rearrange the room while the screen is black.
+          // Voss lies still on the floor in front of the table, his hat knocked off.
+          this.voss.setTexture('collector_down').setPosition(352, 258).setAngle(-90)
             .setFlipX(false).setTint(0xd8cfc6);
-          this.add.image(345, 432, 'bowler').setScale(1.6).setAngle(-15).setDepth(445);
-          this.ren.setPosition(600, 425).setFlipX(true);
-          this.tweens.add({ targets: this.ren, x: 602, duration: 60, yoyo: true, repeat: -1 }); // trembling
-          this.knife.setPosition(586, 410).setDepth(1000);
-          this.kid.setPosition(110, 452);
+          this.inWorld(this.add.image(292, 268, 'bowler').setDepth(262));
+          this.ren.setPosition(414, 242).setFlipX(true);
+          this.tweens.add({ targets: this.ren, x: 416, duration: 60, yoyo: true, repeat: -1 }); // trembling
+          this.knife.setPosition(400, 234).setDepth(1000);
+          this.kid.setPosition(60, 190); // hiding behind the workbench
         }, ms: 600,
         text: 'A scuffle. A knife from the kitchen table. Then, silence.' },
       { run: () => this.fadeFromBlack(1000), ms: 1000,
         text: 'Collector Voss did not get up.' },
-      { run: () => { this.papa.setFlipX(false); this.walk(this.papa, 540, 420, 800); }, ms: 800,
+      { run: () => {
+          this.papa.setPosition(HOME.sideExit.x, HOME.sideExit.y).setFlipX(false);
+          this.walk(this.papa, 384, 266, 1000);
+        }, ms: 1000,
         speaker: 'Papa', text: 'Ren! Oh, Ren...' },
       { speaker: 'Ren', text: "Papa, he grabbed me, I didn't mean to, I—" },
-      { run: () => this.tweens.add({ targets: this.knife, x: 556, y: 410, duration: 400 }), ms: 400,
+      { run: () => this.tweens.add({ targets: this.knife, x: 394, y: 256, duration: 400 }), ms: 400,
         speaker: 'Papa', text: 'Give me the knife. Listen to me. You were never holding it.' },
-      { run: () => { this.walk(this.guardA, 760, 400, 700); this.walk(this.guardB, 820, 430, 700, 100); }, ms: 800,
+      { run: () => { this.enter(this.guardA, 470, 196, 600); this.enter(this.guardB, 516, 222, 600, 100); }, ms: 800,
         speaker: 'Guard', text: "What's going on in here?!" },
       { speaker: 'Papa', text: 'It was me. I did it.' },
       { speaker: 'Ren', text: 'Papa, no—' },
       { speaker: 'Papa', text: 'Look after your sister, Ren. Promise me.' },
       { run: () => {
-          this.walk(this.guardA, 585, 405, 600);
-          this.walk(this.guardB, 600, 432, 600);
-          this.time.delayedCall(600, () => this.knife.setVisible(false));
-          this.walk(this.papa, 1060, 420, 2400, 800);
-          this.walk(this.guardA, 1100, 405, 2400, 800);
-          this.walk(this.guardB, 1110, 435, 2400, 800);
-          this.walk(this.kid, 640, 450, 1200, 900);
-        }, ms: 3200,
+          this.walk(this.guardA, 422, 262, 500);
+          this.walk(this.guardB, 404, 286, 500);
+          this.time.delayedCall(500, () => this.knife.setVisible(false));
+          this.exit(this.papa, 1800, 800);
+          this.exit(this.guardA, 1800, 850);
+          this.exit(this.guardB, 1800, 950);
+          this.walk(this.kid, 446, 246, 1200, 900);
+        }, ms: 3000,
         speaker: 'Tinker', text: 'Papa! PAPA!' },
       { run: () => this.fadeToBlack(1500), ms: 1500, center: 'We never saw him again.' },
       { center: '11 years later' },
     ];
   }
 
-  // --- Backdrop: a cramped tinker's home at night ----------------------------
+  // --- Backdrop: a cramped, poor tinker's home at night ----------------------
+  // Built from the Top-Down Retro Interior and old house tile sets, plus junkyard scrap.
 
   drawHome() {
-    const WALL = 0x2a1c14;
-    const g = this.add.graphics().setDepth(0);
-    // Back wall: mismatched planks, some patched over
-    g.fillStyle(WALL, 1).fillRect(0, 0, WIDTH, 330);
-    g.lineStyle(2, 0x1f140e, 1);
-    for (let x = 0; x < WIDTH; x += 48) g.lineBetween(x, 0, x, 330);
-    for (const [x, y, w, h, c] of [[720, 205, 42, 26, 0x3a2a1c], [278, 236, 22, 44, 0x35251a],
-      [900, 56, 40, 30, 0x3a2a1c], [52, 60, 34, 22, 0x332318]]) {
-      g.fillStyle(c, 1).fillRect(x, y, w, h);
-      g.fillStyle(0x0e0905, 1).fillCircle(x + 3, y + 3, 1.2).fillCircle(x + w - 3, y + 3, 1.2)
-        .fillCircle(x + 3, y + h - 3, 1.2).fillCircle(x + w - 3, y + h - 3, 1.2);
+    const { w, h, floorY } = HOME;
+    const add = (obj) => this.inWorld(obj);
+    const tile = (key, x, y, tw, th, tint) => add(this.add.tileSprite(x, y, tw, th, key).setOrigin(0).setDepth(0).setTint(tint));
+    // Wall decor sits behind everything; floor props sort by their bottom edge
+    const wall = (key, x, y, depth = 1) => add(this.add.image(x, y, key).setOrigin(0).setDepth(depth));
+    const prop = (key, x, y, depth = y) => add(this.add.image(x, y, key).setOrigin(0.5, 1).setDepth(depth));
+
+    // Back wall: faded damask wallpaper above dark wood panelling; bare plank floor
+    tile('wallpaper', 0, 0, w, 40, 0x9a8a7a);
+    tile('wall_panel', 0, 40, w, floorY - 40, 0xa89888);
+    tile('floor_planks', 0, floorY, w, h - floorY, 0x9c8a7a);
+
+    // Walls around the room, with an open doorway on the left into the back room
+    const g = add(this.add.graphics().setDepth(2));
+    g.fillStyle(0x1e110a, 1)
+      .fillRect(-12, -12, w + 24, 12).fillRect(-12, h, w + 24, 12)
+      .fillRect(-12, 0, 12, 170).fillRect(-12, 232, 12, h - 232).fillRect(w, 0, 12, h);
+    g.fillStyle(0x5e3a1e, 1)
+      .fillRect(-2, -2, w + 4, 2).fillRect(-2, h, w + 4, 2).fillRect(w, 0, 2, h)
+      .fillRect(-2, 0, 2, 170).fillRect(-2, 232, 2, h - 232);
+    g.fillStyle(0x050302, 1).fillRect(-60, 170, 60, 62); // dark back-room doorway
+    g.fillStyle(0x1e110a, 1).fillRect(0, floorY - 2, w, 4); // skirting board
+
+    // Front door in the back wall (the closed door hides a dark opening)
+    wall('door_frame', 506, -2);
+    add(this.add.rectangle(536, 50, 48, 92, 0x07080e).setDepth(1));
+    this.door = wall('door_closed', 510, 2, 1.5);
+
+    // Back wall decor: cracked window with moonlight, clock, pot rack, leaky pipe, gears
+    wall('window', 34, 14);
+    add(this.add.image(70, 160, 'light_shafts').setScale(0.22).setAlpha(0.14).setTint(0xb8c8ff)
+      .setBlendMode('ADD').setDepth(3).setCrop(0, 0, 520, 1024));
+    wall('wall_clock', 246, 10);
+    wall('pot_rack', 176, 30);
+    wall('wall_pipe', 368, 18);
+    for (const [x, y, s, flip] of [[302, 46, 0.62, false], [330, 64, 0.42, true], [282, 70, 0.36, true]]) {
+      add(this.add.sprite(x, y, 'gear_0').setScale(s).setFlipX(flip).setDepth(1.2).play('gear_spin'));
     }
-    // Bare plank floor with a threadbare, patched rug
-    g.fillStyle(0x3b2a1e, 1).fillRect(0, 330, WIDTH, HEIGHT - 330);
-    g.lineStyle(2, 0x2c1f16, 1);
-    for (let y = 352; y < HEIGHT; y += 22) g.lineBetween(0, y, WIDTH, y);
-    g.fillStyle(0x1a110b, 1).fillRect(0, 326, WIDTH, 6);
-    g.fillStyle(0x5a2a26, 1).fillEllipse(500, 432, 300, 70);
-    g.lineStyle(2, 0x3e1d1a, 1).strokeEllipse(500, 432, 270, 56);
-    g.fillStyle(0x6b5a3a, 1).fillRect(420, 425, 22, 14);
-    g.fillStyle(0x3e4a5a, 1).fillRect(560, 438, 18, 12);
+    // A drip from the leaky pipe into a bucket
+    prop('bucket', 452, 118);
+    const drip = add(this.add.rectangle(452, 46, PX, PX * 2, 0x8fb8c8).setDepth(2));
+    this.tweens.add({ targets: drip, y: 100, duration: 550, ease: 'Quad.easeIn', repeat: -1, repeatDelay: 900 });
 
-    // Pipes along the walls: across the ceiling, down the corner, and a leaky one
-    drawPipe(g, 0, 26, WIDTH, 26, 10);
-    drawPipe(g, 935, 26, 935, 330, 10);
-    g.fillStyle(0x8a2a1a, 1).fillCircle(935, 190, 11);                   // valve wheel
-    g.fillStyle(WALL, 1).fillCircle(935, 190, 6);
-    g.lineStyle(2, 0x8a2a1a, 1).lineBetween(924, 190, 946, 190).lineBetween(935, 179, 935, 201);
-    drawPipe(g, 600, 268, 790, 268, 7);
-    drawPipe(g, 600, 268, 600, 330, 7);
-    g.fillStyle(0x9aa3a8, 1).fillRect(696, 262, 9, 12);                  // leaky joint (rag-wrapped)
-    g.fillStyle(0x8a7a5e, 1).fillRect(694, 264, 13, 6);
-    g.fillStyle(0x6a6f72, 1).fillRect(690, 336, 20, 16);                  // tin can catching drips
-    g.fillStyle(0x4a4f52, 1).fillRect(690, 336, 20, 3);
-    const drip = this.add.circle(700, 276, 2, 0x8fb8c8).setDepth(1);
-    this.tweens.add({ targets: drip, y: 336, duration: 600, ease: 'Quad.easeIn', repeat: -1, repeatDelay: 900 });
+    // Kitchen corner: wood stove with the kettle, counter with the teacup and a pot
+    prop('wood_stove', 128, 112);
+    this.teapot = prop('teapot', 130, 80, 113);
+    add(this.add.image(128, 92, 'glow').setTint(C.fire).setBlendMode('ADD').setScale(0.8).setAlpha(0.35).setDepth(3));
+    add(spawnFx(this, 'steam', 142, 72, { scale: 0.1, alpha: 0.45, depth: 114, randomStart: true })); // simmering
+    prop('counter', 204, 112);
+    prop('cook_pot', 190, 90, 113);
 
-    // Window (one cracked pane) with the moon
-    g.fillStyle(0x5e3f22, 1).fillRect(140, 80, 120, 110);
-    g.fillStyle(0x0f1a2e, 1).fillRect(148, 88, 104, 94);
-    g.fillStyle(0xf3e6c4, 1).fillCircle(225, 115, 14);
-    g.fillStyle(0x5e3f22, 1).fillRect(197, 88, 6, 94).fillRect(148, 132, 104, 6);
-    g.lineStyle(1, 0x8fa8c0, 0.7).lineBetween(150, 92, 172, 112).lineBetween(172, 112, 168, 128).lineBetween(172, 112, 192, 118);
-    g.fillStyle(0x6b5a3a, 1).fillRect(156, 140, 30, 18);                  // board over a broken pane
+    // Papa's workbench with half-built gadgets under a candle, crates of parts beside it
+    prop('workbench', 64, 196);
+    prop('desk_drawers', 138, 196);
+    prop('gears_small', 56, 168, 197);
+    prop('candle', 96, 160, 197);
+    const candleGlow = add(this.add.image(96, 150, 'glow').setTint(0xffc070).setBlendMode('ADD')
+      .setScale(0.9).setAlpha(0.45).setDepth(3));
+    this.tweens.add({ targets: candleGlow, alpha: 0.3, scale: 0.8, duration: 170, yoyo: true, repeat: -1 });
+    prop('crate_small', 184, 198);
+    prop('crate_small', 192, 176, 177);
 
-    // Left wall: a big gear on a nail, a coiled spring, a hanging piston
-    g.lineStyle(1, 0x8a7a5e, 1).lineBetween(40, 40, 30, 72).lineBetween(40, 40, 50, 72);
-    g.fillStyle(0x1a110b, 1).fillCircle(40, 40, 2);
-    drawCog(g, 40, 98, 24, 12, 0x7a6a4a);
-    drawSpring(g, 100, 100, 50, 7);
-    drawPiston(g, 118, 50, 36, true);
+    // Kitchen table with a single chair, on a worn rug
+    add(this.add.image(330, 246, 'rug').setTint(0x9a8a80).setDepth(2));
+    prop('chair', 330, 176);
+    prop('table', 330, 224);
 
-    // Pegboard above the workbench with tools
-    g.fillStyle(0x4a3624, 1).fillRect(20, 205, 230, 100);
-    g.fillStyle(0x3a2a1c, 1);
-    for (let x = 30; x < 250; x += 14) for (let y = 215; y < 300; y += 14) g.fillCircle(x, y, 1.3);
-    drawHangingWrench(g, 40, 220, 46, 0x4a3624);
-    drawHangingWrench(g, 60, 220, 36, 0x4a3624);
-    drawHangingWrench(g, 78, 220, 28, 0x4a3624);
-    g.fillStyle(0x5e3719, 1).fillRect(104, 222, 5, 48);                    // hammer
-    g.fillStyle(0x6a6f72, 1).fillRect(94, 216, 26, 10);
-    drawSpring(g, 140, 222, 30, 6, true, C.copperLight);
-    drawCog(g, 180, 240, 14, 9, C.copper);
-    drawCog(g, 222, 232, 10, 8, C.brass);
-    drawCog(g, 214, 272, 12, 8, 0x7a6a4a);
-    g.lineStyle(3, C.copper, 1).strokeCircle(160, 284, 10);                // coil of pipe
-
-    // Upper shelf: a pile of cogs, a spring, an empty coin jar
-    g.fillStyle(0x5e3f22, 1).fillRect(290, 100, 175, 8);
-    g.fillStyle(0x45301a, 1).fillRect(296, 108, 6, 10).fillRect(452, 108, 6, 10);
-    drawCog(g, 312, 86, 12, 9, C.brass);
-    drawCog(g, 334, 90, 9, 8, C.copper);
-    drawCog(g, 322, 72, 8, 7, 0x7a6a4a);
-    drawCog(g, 350, 80, 11, 9, C.brassDark);
-    drawSpring(g, 375, 85, 30, 6, false);
-    g.lineStyle(2, 0xa8c0c8, 0.7).strokeRoundedRect(420, 68, 26, 32, 4);  // coin jar...
-    g.fillStyle(C.brass, 1).fillCircle(433, 96, 3);                        // ...with one coin
-    // Lower shelf: jars, cogs, a piston
-    g.fillStyle(0x5e3f22, 1).fillRect(300, 150, 160, 8);
-    g.fillStyle(0x6a8a7a, 1).fillRoundedRect(306, 124, 16, 26, 3);
-    g.fillStyle(0x8a5a3a, 1).fillRoundedRect(326, 130, 14, 20, 3);
-    drawCog(g, 362, 137, 11, 9, C.brass);
-    g.fillStyle(0x2f5a4a, 1).fillRect(382, 128, 14, 22);                  // tea tins
-    g.fillStyle(C.brass, 1).fillRect(382, 135, 14, 5);
-    g.fillStyle(0x7a2e22, 1).fillRect(400, 132, 12, 18);
-    g.fillStyle(0xe8dcc0, 1).fillEllipse(436, 146, 30, 8).fillEllipse(436, 140, 26, 7).fillEllipse(436, 134, 22, 6); // stacked bowls
-
-    // Gears hanging on strings over the back wall, plus a little turning gear train
-    for (const [x, len, r, col] of [[630, 40, 14, C.brass], [668, 70, 10, C.copper], [700, 30, 18, 0x7a6a4a],
-      [745, 58, 12, C.brass], [775, 36, 8, C.copper]]) {
-      g.lineStyle(1, 0x8a7a5e, 1).lineBetween(x, 40, x, 40 + len - r);
-      g.fillStyle(0x1a110b, 1).fillCircle(x, 40, 1.5);
-      drawCog(g, x, 40 + len, r, Math.round(r * 0.7), col);
-    }
-    g.fillStyle(0x4a3624, 1).fillRoundedRect(450, 172, 110, 70, 6);        // wall-mounted gear train
-    g.lineStyle(2, C.brassDark, 1).strokeRoundedRect(450, 172, 110, 70, 6);
-    const spin = (x, y, scale, tint, dir) => {
-      const cog = this.add.image(x, y, 'cog').setScale(scale).setTint(tint).setDepth(1);
-      this.tweens.add({ targets: cog, angle: dir * 360, duration: 6000 * scale, repeat: -1 });
-    };
-    spin(482, 205, 1.1, C.brass, 1);
-    spin(517, 196, 0.65, C.copper, -1);
-    spin(535, 222, 0.55, C.brassLight, 1);
-
-    // Shelf over the door: pipe offcuts, a dented kettle
-    g.fillStyle(0x5e3f22, 1).fillRect(785, 150, 110, 7);
-    drawPipe(g, 792, 143, 832, 143, 6);
-    g.fillStyle(0x6a6f72, 1).fillEllipse(862, 140, 26, 18).fillRect(870, 133, 14, 4);
-    // Piles of mechanical junk along the walls and in the corners
-    drawCog(g, 905, 298, 26, 14, 0x5a4a3a);                               // big rusty gear leaning on the wall
-    drawJunkPile(g, 915, 352, 110, 75, 26, 'corner');
-    drawJunkPile(g, 24, 348, 80, 50, 16, 'left');
-    drawJunkPile(g, 648, 342, 78, 44, 15, 'leak');
-    drawJunkPile(g, 765, 336, 46, 26, 8, 'door');
-    drawJunkPile(g, 232, 422, 40, 22, 7, 'bench');                       // spilling out from under the bench
-
-    // Stove with a fire
-    this.add.image(345, 300, 'glow').setTint(C.fire).setBlendMode('ADD').setScale(1.6).setAlpha(0.45).setDepth(1);
-    g.fillStyle(C.brassDark, 1).fillRect(338, 200, 14, 60);
-    g.fillStyle(0xb5893a, 1).fillRoundedRect(305, 255, 80, 75, 5);
-    g.fillStyle(0x1a0e08, 1).fillRect(322, 285, 46, 30);
-    g.fillStyle(0xff8c1a, 1).fillRect(326, 300, 38, 13);
-    g.fillStyle(0xffd27a, 1).fillRect(334, 306, 20, 7);
-
-    // --- Kitchen corner ---
-    // Pot rail with a pan, ladle, copper pot and spoon
-    g.lineStyle(3, 0x6a6f72, 1).lineBetween(286, 186, 448, 186);
-    g.lineStyle(1.5, 0x6a6f72, 1).lineBetween(300, 186, 300, 196).lineBetween(322, 186, 322, 200)
-      .lineBetween(412, 186, 412, 194).lineBetween(440, 186, 440, 196);
-    g.fillStyle(0x3a3a3a, 1).fillRect(298, 196, 4, 12).fillCircle(300, 218, 11);   // frying pan
-    g.fillStyle(0x2a2a2a, 1).fillCircle(300, 218, 7);
-    g.fillStyle(0x8a939a, 1).fillRect(321, 200, 3, 22).fillEllipse(322, 224, 10, 7); // ladle
-    g.fillStyle(C.copper, 1).fillRoundedRect(399, 196, 26, 20, 4);                  // copper pot
-    g.fillStyle(C.copperLight, 1).fillRect(397, 196, 30, 3);
-    g.fillStyle(0x8a939a, 1).fillRect(439, 196, 2, 18).fillEllipse(440, 216, 5, 7); // spoon
-    // Small pot on the back burner
-    g.fillStyle(0x3a3a3a, 1).fillRoundedRect(310, 241, 24, 15, 3);
-    g.fillStyle(0x4a4a4a, 1).fillRect(308, 240, 28, 3);
-    // Crockery shelf above the counter
-    g.fillStyle(0x5e3f22, 1).fillRect(386, 240, 62, 6);
-    g.fillStyle(0xe8dcc0, 1).fillCircle(398, 230, 9).fillCircle(414, 230, 9);       // plates on edge
-    g.fillStyle(0xc9b896, 1).fillCircle(398, 230, 5).fillCircle(414, 230, 5);
-    g.fillStyle(0xe8dcc0, 1).fillRoundedRect(428, 228, 9, 12, 2).fillRoundedRect(439, 230, 8, 10, 2); // mugs
-    // Counter with cupboard doors, a tin washbasin and a tea tin
-    g.fillStyle(0x5e3f22, 1).fillRect(388, 290, 68, 40);
-    g.lineStyle(1.5, 0x3a2614, 1).strokeRect(392, 297, 28, 29).strokeRect(424, 297, 28, 29);
-    g.fillStyle(C.brass, 1).fillCircle(416, 311, 1.8).fillCircle(428, 311, 1.8);
-    g.fillStyle(0x7a5532, 1).fillRect(385, 285, 74, 6);
-    g.fillStyle(0x8a939a, 1).fillEllipse(404, 282, 28, 9);
-    g.fillStyle(0x5a6f80, 1).fillEllipse(404, 281, 20, 5);
-    g.fillStyle(0x2f5a4a, 1).fillRect(441, 270, 12, 16);
-    g.fillStyle(C.brass, 1).fillRect(441, 275, 12, 4);
-    // Water bucket by the stove
-    g.fillStyle(0x6a6f72, 1).fillRect(284, 312, 18, 18);
-    g.lineStyle(1.5, 0x4a4f52, 1).strokeEllipse(293, 309, 20, 8);
-
-    // Kettle on the stove (its own object so it can rattle when it whistles)
-    this.kettle = this.add.graphics({ x: 368, y: 248 }).setDepth(2);
-    this.kettle.lineStyle(2.5, 0x3a2a1c, 1).strokeEllipse(0, -9, 18, 12);
-    this.kettle.fillStyle(0x8a939a, 1).fillTriangle(9, -3, 20, -12, 12, 3);
-    this.kettle.fillStyle(0x9aa3a8, 1).fillEllipse(0, 0, 24, 18);
-    this.kettle.fillStyle(0xc8d0d4, 1).fillEllipse(-4, -3, 8, 5);
-    this.kettle.fillStyle(0x6a6f72, 1).fillEllipse(0, -8, 10, 4).fillCircle(0, -11, 2);
-    this.kettleSteam = this.add.particles(388, 236, 'puff', {
-      lifespan: 1400, speedX: { min: 4, max: 14 }, speedY: { min: -30, max: -15 },
-      scale: { start: 0.1, end: 0.6 }, alpha: { start: 0.35, end: 0 }, tint: 0xe8dcc0, frequency: 260,
-    }).setDepth(3);
-
-    // Papa's workbench, covered in half-built gadgets
-    g.fillStyle(0x5e3f22, 1).fillRect(40, 330, 210, 18);
-    g.fillStyle(0x45301a, 1).fillRect(50, 348, 12, 70).fillRect(228, 348, 12, 70);
-    g.fillStyle(0x6a6f72, 1).fillRect(42, 314, 18, 16).fillRect(38, 312, 26, 5);   // vise
-    // Clockwork bird: brass body, exposed cog, one finished wing
-    g.fillStyle(C.brass, 1).fillEllipse(82, 318, 24, 15).fillCircle(93, 311, 6);
-    g.fillStyle(0xd08a2a, 1).fillTriangle(98, 310, 105, 312, 98, 314);
-    g.fillStyle(0x1a110b, 1).fillCircle(94, 310, 1.2);
-    drawCog(g, 80, 319, 4, 6, C.copper);
-    g.lineStyle(1, 0x9aa3a8, 1).lineBetween(76, 312, 66, 302).lineBetween(66, 302, 82, 306);
-    // Music box with its lid open
-    g.fillStyle(0x7a4a24, 1).fillRoundedRect(110, 312, 44, 20, 4);
-    g.fillStyle(0x5e3719, 1).fillRect(112, 296, 40, 5);
-    drawCog(g, 124, 312, 6, 7, C.brass);
-    drawCog(g, 140, 310, 4, 6, C.brassLight);
-    // Robot head with a panel off and wires hanging out
-    g.fillStyle(0x6a6f72, 1).fillRoundedRect(170, 306, 24, 24, 4);
-    g.fillStyle(0x7fd0dc, 1).fillCircle(178, 316, 4);
-    g.fillStyle(0x2a2a2a, 1).fillRect(185, 312, 6, 10);
-    g.lineStyle(1.5, 0xc0392b, 1).lineBetween(188, 322, 196, 332);
-    g.lineStyle(1.5, 0xf2c94c, 1).lineBetween(186, 322, 192, 333);
-    g.lineStyle(1.5, 0x9aa3a8, 1).lineBetween(182, 306, 182, 298);
-    g.fillStyle(0xc0392b, 1).fillCircle(182, 297, 2);
-    // Loose screws and a spare spring
-    g.fillStyle(0x9aa3a8, 1).fillCircle(160, 328, 1.3).fillCircle(165, 326, 1.3).fillCircle(203, 328, 1.3);
-    drawSpring(g, 204, 322, 16, 4, false);
-    // Under the bench: a battered toolbox, a piston, a crate of scrap
-    g.fillStyle(0x7a2e22, 1).fillRect(74, 396, 56, 22);
-    g.fillStyle(0x5a1f18, 1).fillRect(74, 396, 56, 4);
-    g.lineStyle(2, 0x6a6f72, 1).strokeRect(94, 389, 16, 8);
-    drawPiston(g, 140, 410, 50);
-    g.fillStyle(0x4a3624, 1).fillRect(196, 392, 30, 26);
-    drawCog(g, 204, 390, 7, 7, C.copper);
-    drawCog(g, 218, 388, 5, 6, C.brass);
-
-    // Small oil lamp on the bench
-    this.benchLamp = this.add.image(238, 312, 'glow').setTint(0xffc070).setBlendMode('ADD')
-      .setScale(1.3).setAlpha(0.5).setDepth(1);
-    this.tweens.add({ targets: this.benchLamp, alpha: 0.35, scale: 1.2, duration: 180, yoyo: true, repeat: -1 });
-    g.fillStyle(C.brass, 1).fillRect(230, 324, 16, 6).fillEllipse(238, 324, 16, 6);
-    g.fillStyle(0xffe0a0, 0.9).fillEllipse(238, 314, 10, 14);
-    g.fillStyle(0xff9a3c, 1).fillEllipse(238, 316, 4, 7);
-
-    // Door (the panel is its own object so it can rattle and open)
-    g.fillStyle(0x3a2614, 1).fillRect(795, 165, 90, 170);
-    this.door = this.add.rectangle(840, 252, 72, 158, 0x6b4a2b).setStrokeStyle(2, 0x45301a).setDepth(1);
-    this.doorKnob = this.add.circle(864, 255, 4, C.brass).setDepth(2);
-
-    // Hanging lamp
-    g.lineStyle(2, 0x1a110b, 1).lineBetween(560, 0, 560, 60);
-    g.fillStyle(C.brass, 1).fillRect(550, 60, 20, 22);
-    g.fillStyle(0xffc45a, 1).fillRect(554, 64, 12, 14);
-    this.add.image(560, 120, 'glow').setTint(0xffc070).setBlendMode('ADD').setScale(4).setAlpha(0.3).setDepth(1);
-
-    // Kitchen table (drawn in front of anyone sitting behind it) and a chair
-    const chair = this.add.graphics().setDepth(320);
-    chair.fillStyle(0x45301a, 1).fillRect(462, 300, 36, 80);
-    const table = this.add.graphics().setDepth(400);
-    table.fillStyle(0x6b4a2b, 1).fillRect(400, 372, 180, 20);
-    table.fillStyle(0x7a5532, 1).fillRect(400, 372, 180, 4);
-    table.fillStyle(0x45301a, 1).fillRect(410, 392, 12, 44).fillRect(558, 392, 12, 44);
+    // Junk piled along the walls and in the corners
+    prop('junk_scrap', 478, 124);
+    prop('junk_gears', 36, 290);
+    prop('junk_small_gears', 150, 290);
+    prop('junk_tires', 238, 290);
+    prop('junk_plates', 470, 290);
+    prop('junk_pipes', 548, 290);
   }
 }
 
@@ -1125,7 +1094,7 @@ class StoryScene extends Phaser.Scene {
       drawPipe(g, 0, 60, WIDTH, 60, 12);
       drawPipe(g, 0, 100, WIDTH, 100, 8);
       drawGauge(g, 650, 80);
-      keep(this.add.tileSprite(0, 300, WIDTH, 180, 'plate').setOrigin(0));
+      keep(this.add.tileSprite(0, 300, WIDTH, 180, 'floor_terracotta').setOrigin(0).setTint(0x8a7060));
       for (const fx of [110, 290, 780]) furnace(fx, 300, 1.6);
 
       // The broken press on line three (drawn above the floor)
@@ -1227,30 +1196,57 @@ class FactoryScene extends Phaser.Scene {
   // --- Setup -----------------------------------------------------------------
 
   buildLevel() {
-    this.add.tileSprite(0, 0, WIDTH, HEIGHT, 'plate').setOrigin(0).setDepth(0);
+    // Scorched terracotta floor (Top-Down Retro Interior) with drain grates
+    this.add.tileSprite(0, 0, WIDTH, HEIGHT, 'floor_terracotta').setOrigin(0).setDepth(0).setTint(0x5e4a3e);
+    for (const [x, y] of [[110, 470], [490, 250], [820, 420], [600, 560]]) {
+      this.add.image(x, y, 'floor_grate').setDepth(0.5).setTint(0xb0a090);
+    }
 
-    const g = this.add.graphics().setDepth(1);
-    // Floor details: oil stains and drain grates
+    // Walls, pipes and gauges are drawn in code, then rendered at half resolution and
+    // scaled back up so they land on the same 2px pixel grid as the sprites.
+    const g = this.make.graphics({ x: 0, y: 0 }, false);
     for (const [x, y, w, h] of [[150, 300, 60, 26], [620, 520, 48, 20], [820, 330, 40, 18], [400, 80, 50, 22]]) {
-      g.fillStyle(0x0c0907, 0.6).fillEllipse(x, y, w, h);
+      g.fillStyle(0x0c0907, 0.5).fillEllipse(x, y, w, h); // oil stains
     }
-    for (const [x, y] of [[110, 470], [490, 250], [820, 420]]) {
-      g.fillStyle(0x0c0907, 1).fillRect(x - 14, y - 14, 28, 28);
-      g.lineStyle(2, 0x4d3d2c, 1).strokeRect(x - 14, y - 14, 28, 28);
-      for (let i = -8; i <= 8; i += 6) g.lineBetween(x + i, y - 12, x + i, y + 12);
-    }
-
-    // Walls and crates (solid, block vision)
     this.blockers = [];
     this.wallGroup = this.physics.add.staticGroup();
+    const solid = (x, y, w, h) => {
+      this.wallGroup.add(this.add.rectangle(x + w / 2, y + h / 2, w, h).setVisible(false));
+      this.blockers.push(new Phaser.Geom.Rectangle(x, y, w, h));
+    };
     for (const w of WALLS) {
-      if (w.crate) this.drawCrate(g, w);
-      else this.drawWall(g, w);
-      const solid = this.add.rectangle(w.x + w.w / 2, w.y + w.h / 2, w.w, w.h).setVisible(false);
-      this.wallGroup.add(solid);
-      this.blockers.push(new Phaser.Geom.Rectangle(w.x, w.y, w.w, w.h));
+      if (w.crate) {
+        // A stack of junkyard crates fills each crate block
+        g.fillStyle(0x000000, 0.35).fillRect(w.x + 2, w.y + 6, w.w, w.h);
+        this.add.image(w.x + 15, w.y + w.h, 'crate').setOrigin(0.5, 1).setDepth(w.y + w.h);
+        this.add.image(w.x + 46, w.y + w.h, 'crate').setOrigin(0.5, 1).setDepth(w.y + w.h).setFlipX(true);
+        this.add.image(w.x + 30, w.y + 22, 'crate_small').setOrigin(0.5, 1).setDepth(w.y + w.h + 1);
+      } else {
+        this.drawWall(g, w);
+      }
+      solid(w.x, w.y, w.w, w.h);
     }
-    for (const [x, y] of [[210, 110], [710, 110], [450, 160], [210, 520], [710, 500], [530, 480]]) drawGauge(g, x, y);
+    for (const [x, y] of PRESSURE_GAUGES) drawGauge(g, x, y);
+    const rt = this.add.renderTexture(0, 0, WIDTH / PX, HEIGHT / PX).setOrigin(0).setScale(PX).setDepth(1);
+    g.setScale(1 / PX);
+    rt.draw(g);
+    g.destroy();
+    rt.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+
+    // Spinning gears mounted on the walls
+    for (const [x, y] of WALL_GEARS) {
+      this.add.sprite(x, y, 'gear_0').setScale(0.9).setDepth(1.5).play({ key: 'gear_spin', startFrame: Phaser.Math.Between(0, GEAR_FRAMES - 1) });
+    }
+
+    // Hazard drums and junk piles: solid cover that also blocks sight
+    for (const b of BARRELS) {
+      this.add.image(b.x, b.y, 'drum_hazard').setOrigin(0.5, 1).setDepth(b.y);
+      solid(b.x - 14, b.y - 24, 28, 24);
+    }
+    for (const j of JUNK) {
+      const img = this.add.image(j.x, j.y, j.key).setOrigin(0.5, 1).setDepth(j.y);
+      solid(j.x - img.width / 2 + 4, j.y - 22, img.width - 8, 22);
+    }
   }
 
   drawWall(g, w) {
@@ -1268,19 +1264,6 @@ class FactoryScene extends Phaser.Scene {
     }
   }
 
-  drawCrate(g, w) {
-    g.fillStyle(0x000000, 0.35).fillRect(w.x + 4, w.y + 6, w.w, w.h);
-    g.fillStyle(0x5e3f22, 1).fillRect(w.x, w.y, w.w, w.h);
-    g.lineStyle(2, 0x45301a, 1);
-    for (let y = w.y + 15; y < w.y + w.h; y += 15) g.lineBetween(w.x, y, w.x + w.w, y);
-    g.lineStyle(5, 0x7a5532, 1).lineBetween(w.x + 4, w.y + 4, w.x + w.w - 4, w.y + w.h - 4);
-    g.lineStyle(3, 0x3a2614, 1).strokeRect(w.x, w.y, w.w, w.h);
-    for (const [cx, cy] of [[w.x, w.y], [w.x + w.w - 9, w.y], [w.x, w.y + w.h - 9], [w.x + w.w - 9, w.y + w.h - 9]]) {
-      g.fillStyle(C.brass, 1).fillRect(cx, cy, 9, 9);
-      g.fillStyle(C.brassDark, 1).fillCircle(cx + 4.5, cy + 4.5, 1.5);
-    }
-  }
-
   buildFurnaces() {
     this.furnaces = FURNACES.map((f) => {
       const baseY = f.y + 22;
@@ -1288,11 +1271,14 @@ class FactoryScene extends Phaser.Scene {
         .setScale(1.8).setAlpha(0.55).setDepth(2);
       const sprite = this.add.image(f.x, baseY, 'furnace').setOrigin(0.5, 1).setDepth(baseY);
       const flame = this.add.image(f.x, f.y + 12, 'flame').setOrigin(0.5, 1).setScale(0.75).setDepth(baseY + 0.5);
+      // Smoke from the chimney, embers curling up from the firebox
+      const smoke = spawnFx(this, 'smoke', f.x, f.y - 46, { scale: 0.16, alpha: 0.4, depth: 1550, randomStart: true });
+      const embers = spawnFx(this, 'emberSwirl', f.x, f.y + 8, { scale: 0.13, alpha: 0.75, add: true, depth: baseY + 1, randomStart: true });
 
       const solid = this.add.rectangle(f.x, f.y, 40, 40).setVisible(false);
       this.wallGroup.add(solid);
       this.blockers.push(new Phaser.Geom.Rectangle(f.x - 20, f.y - 20, 40, 40));
-      return { x: f.x, y: f.y, glow, sprite, flame, sabotaged: false };
+      return { x: f.x, y: f.y, glow, sprite, flame, smoke, embers, sabotaged: false };
     });
   }
 
@@ -1346,12 +1332,40 @@ class FactoryScene extends Phaser.Scene {
     }).setDepth(1500);
     // Hissing pipe vents
     for (const v of STEAM_VENTS) {
-      this.add.particles(v.x, v.y, 'puff', {
-        lifespan: 1600, speedX: { min: -15, max: 15 }, speedY: { min: -30, max: -10 },
-        scale: { start: 0.15, end: 0.9 }, alpha: { start: 0.35, end: 0 },
-        tint: 0xe8dccb, frequency: 160,
-      }).setDepth(1500);
+      spawnFx(this, 'steam', v.x, v.y, { scale: 0.2, alpha: 0.5, depth: 1500, randomStart: true });
     }
+
+    // Wall lamps that flicker, and now and then cut out for a moment
+    this.lamps = WALL_LAMPS.map(([x, y]) => {
+      this.add.rectangle(x, y, 6, 6, C.brass).setDepth(1.6);
+      return this.add.image(x, y, 'glow').setTint(0xffc070).setBlendMode('ADD').setScale(1.4).setAlpha(0.35).setDepth(2);
+    });
+
+    // Random little events: sparks from the gauges, a dust devil crossing the floor
+    const loop = (min, max, fn) => {
+      const tick = () => { fn(); this.time.delayedCall(Phaser.Math.Between(min, max), tick); };
+      this.time.delayedCall(Phaser.Math.Between(min, max), tick);
+    };
+    loop(1800, 4200, () => {
+      const [x, y] = Phaser.Utils.Array.GetRandom(PRESSURE_GAUGES);
+      spawnFx(this, 'sparks', x, y, { scale: 0.16, add: true, depth: 1560, flipX: Math.random() < 0.5 });
+    });
+    loop(6000, 11000, () => {
+      const p = this.player;
+      for (let tries = 0; tries < 8; tries++) {
+        const x = Phaser.Math.Between(60, WIDTH - 60), y = Phaser.Math.Between(80, HEIGHT - 40);
+        if (Phaser.Math.Distance.Between(x, y, p.x, p.y) < 140) continue;
+        if (this.blockers.some((r) => r.contains(x, y))) continue;
+        const dust = spawnFx(this, 'dust', x, y, { scale: 0.26, alpha: 0, depth: 1520 });
+        this.tweens.add({ targets: dust, alpha: 0.35, duration: 600, yoyo: true, hold: 1600, onComplete: () => dust.destroy() });
+        break;
+      }
+    });
+    loop(3000, 7000, () => {
+      const lamp = Phaser.Utils.Array.GetRandom(this.lamps);
+      this.tweens.add({ targets: lamp, alpha: 0.05, duration: 60, yoyo: true, repeat: Phaser.Math.Between(1, 3) });
+    });
+
     // Night shadows around the edges
     this.add.image(0, 0, 'vignette').setOrigin(0).setDepth(1800);
   }
@@ -1450,7 +1464,7 @@ class FactoryScene extends Phaser.Scene {
     const damage = rolled * (sneak ? SNEAK_ATTACK_MULTIPLIER : 1);
     const luckyKo = Math.random() < (weaponClass.instantKoChance || 0);
 
-    this.sparks((s.x + p.x) / 2, (s.y + p.y) / 2 - 20);
+    this.sparks((s.x + p.x) / 2, (s.y + p.y) / 2 - 20, sneak || luckyKo);
     this.cameras.main.shake(sneak || luckyKo ? 140 : 90, sneak || luckyKo ? 0.008 : 0.005);
 
     if (luckyKo) {
@@ -1506,6 +1520,7 @@ class FactoryScene extends Phaser.Scene {
       this.hpEmpty.clearTint();
     });
     this.cameras.main.shake(160, 0.01);
+    spawnFx(this, 'sparks', p.x, p.y - 22, { scale: 0.2, add: true, tint: 0xff7a60, depth: 1950, flipX: g.sprite.x > p.x });
     this.floatText(p.x, p.y - 56, `-${GUARD_DAMAGE}`, '#ff6b6b');
 
     if (this.hp <= 0) this.defeated();
@@ -1776,14 +1791,10 @@ class FactoryScene extends Phaser.Scene {
     }
   }
 
-  sparks(x, y) {
-    for (let i = 0; i < 8; i++) {
-      const s = this.add.circle(x, y, 2.5, i % 2 ? 0xffd43b : 0xff9a3c).setDepth(1950);
-      this.tweens.add({
-        targets: s, x: x + Phaser.Math.Between(-30, 30), y: y + Phaser.Math.Between(-30, 20),
-        alpha: 0, duration: 300, onComplete: () => s.destroy(),
-      });
-    }
+  // Impact effect for a wrench hit; heavy hits (sneak attacks, knockouts) add a burst of embers
+  sparks(x, y, heavy = false) {
+    spawnFx(this, 'sparks', x, y, { scale: heavy ? 0.3 : 0.22, add: true, depth: 1950, flipX: Math.random() < 0.5 });
+    if (heavy) spawnFx(this, 'embers', x, y + 12, { scale: 0.28, add: true, depth: 1951 });
   }
 
   floatText(x, y, text, color) {
@@ -1814,6 +1825,11 @@ class FactoryScene extends Phaser.Scene {
     f.flame.setVisible(false);
     f.glow.setVisible(false);
     f.sprite.setTint(0x6a6a6a);
+    f.embers.destroy();
+    this.tweens.add({ targets: f.smoke, alpha: 0, duration: 2500, onComplete: () => f.smoke.destroy() });
+    spawnFx(this, 'embers', f.x, f.y + 6, { scale: 0.3, add: true, depth: 1600 });
+    const hiss = spawnFx(this, 'steam', f.x, f.y - 4, { scale: 0.3, alpha: 0.7, depth: 1601 });
+    hiss.once('animationrepeat', () => hiss.destroy());
     this.prompt.setVisible(false);
     this.cameras.main.shake(120, 0.004);
 
@@ -1861,10 +1877,10 @@ class FactoryScene extends Phaser.Scene {
       .setFontSize(28)
       .setColor('#e2bd55')
       .setVisible(true);
-    this.add.text(WIDTH / 2, HEIGHT - 28, 'Health bar art: "Steampunk HP Bars" by mental.bloxx', {
-      fontFamily: 'monospace', fontSize: '12px', color: '#a8916a',
-      backgroundColor: '#140e0acc', padding: { x: 6, y: 3 },
-    }).setOrigin(0.5).setDepth(2100);
+    this.add.text(WIDTH / 2, HEIGHT - 16, CREDITS.join('\n'), {
+      fontFamily: 'monospace', fontSize: '11px', color: '#a8916a', align: 'center',
+      backgroundColor: '#140e0acc', padding: { x: 8, y: 4 },
+    }).setOrigin(0.5, 1).setDepth(2100);
   }
 
   // Reveal the full tube up to the current health; the empty tube shows through beyond it
@@ -1894,16 +1910,24 @@ class FactoryScene extends Phaser.Scene {
   }
 }
 
-new Phaser.Game({
-  type: Phaser.AUTO,
-  parent: 'game',
-  width: WIDTH,
-  height: HEIGHT,
-  backgroundColor: '#140e0a',
-  physics: { default: 'arcade', arcade: { debug: false } },
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-  scene: [BootScene, PrologueScene, StoryScene, FactoryScene],
-});
+if (location.protocol === 'file:') {
+  // Browsers won't let WebGL use image files opened straight from disk
+  document.getElementById('game').innerHTML = `<div id="local-file-note">
+    <b>Tinker's War needs a tiny local server to load its art.</b><br><br>
+    Double-click <code>start.bat</code> in the game folder,<br>
+    or run <code>node serve.js</code> and open <code>http://localhost:8000</code>.</div>`;
+} else {
+  new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game',
+    width: WIDTH,
+    height: HEIGHT,
+    backgroundColor: '#140e0a',
+    physics: { default: 'arcade', arcade: { debug: false } },
+    scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+    scene: [BootScene, PrologueScene, StoryScene, FactoryScene],
+  });
+}
 </script>
 </body>
 </html>

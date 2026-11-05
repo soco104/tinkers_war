@@ -4,5 +4,8 @@
 *.psd
 *.unitypackage
 
+# The raw asset packs. Only the images the game uses are copied into art/ and committed.
+assets/
+
 # Temporary working files
 scratchpad/
